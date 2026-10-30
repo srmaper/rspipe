@@ -9,11 +9,7 @@
     <div id="top">
       <!-- 左栏 -->
       <div id="left">
-        <div class="card guide-entry" id="tour-guide" @click="startTour">
-          <h3>操作指引</h3>
-          <div class="ge-desc">6 步走完：圈范围 → 检索 → 下载 → 预览 → 分析</div>
-          <button class="primary ge-btn">开始指引</button>
-        </div>
+        <button class="primary guide-btn" id="tour-guide" @click="startTour">操作指引</button>
 
         <div id="tour-aoi">
           <AoiCard :bbox="bbox" :aoi-name="aoiName" :active="aoiTool"
@@ -546,9 +542,6 @@ defineEmits(['home'])
   box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .channelbar button { min-height: 26px; padding: 2px 10px; font-size: 11.5px; white-space: nowrap; }
-.guide-entry { cursor: pointer; }
-.guide-entry:hover { border-color: var(--accent); }
-.ge-desc { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
-.ge-btn { width: 100%; }
+.guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
 .back { flex: none; }
 </style>
