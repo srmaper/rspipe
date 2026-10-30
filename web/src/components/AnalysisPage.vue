@@ -71,6 +71,11 @@
           <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
           <div class="hint">{{ legendNote }}</div>
         </div>
+        <div class="card logbox">
+          <h3>日志</h3>
+          <div class="log" ref="logEl">{{ logs.join('\n') }}</div>
+        </div>
+
       </div>
 
       <!-- 中央地图 -->
@@ -93,11 +98,6 @@
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
           </div>
-        </div>
-
-        <div class="card logbox">
-          <h3>日志</h3>
-          <div class="log" ref="logEl">{{ logs.join('\n') }}</div>
         </div>
       </div>
     </div>
