@@ -86,6 +86,7 @@
       :sid="bandPick.sid"
       :sentinel="bandPick.sentinel"
       :provider="bandPick.provider"
+      :area-km2="aoiArea"
       @confirm="onBandConfirm"
       @cancel="bandPick = null"
     />
