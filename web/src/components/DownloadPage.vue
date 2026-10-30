@@ -10,6 +10,7 @@
       <!-- 左栏 -->
       <div id="left">
         <AoiCard :bbox="bbox" :aoi-name="aoiName" :active="aoiTool"
+                 :area="aoiArea" :limit="AREA_LIMIT"
                  @set="onToolBtn" @clear="clearAoi" />
         <SearchCard v-model:cfg="sCfg" :loading="searching" :bbox-ready="!!bbox" @search="onSearch" />
             <div class="card" id="logbox">
@@ -40,7 +41,6 @@
           <button :class="{ primary: extentVisible }" @click="toggleExtent">范围</button>
           <button @click="clearPreview">关闭</button>
         </div>
-        <div id="msg" :style="{display: toast ? 'block' : 'none'}">{{ toast }}</div>
       </div>
 
       <!-- 右栏 -->
@@ -71,6 +71,7 @@
     </div>
 
     <SceneDrawer v-if="detail" :detail="detail" @close="detail = null" />
+    <MessageBox ref="msgBox" />
     <BandPicker
       v-if="bandPick"
       :sid="bandPick.sid"
@@ -90,6 +91,7 @@ import SearchCard from './SearchCard.vue'
 import SceneCard from './SceneCard.vue'
 import SceneDrawer from './SceneDrawer.vue'
 import BandPicker from './BandPicker.vue'
+import MessageBox from './MessageBox.vue'
 import TasksCard from './TasksCard.vue'
 
 const mapRef = ref(null)
@@ -136,12 +138,42 @@ const sCfg = ref({
     { provider: 'planetary-computer', collection: 'landsat-c2-l2' },
   ],
 })
-const toast = ref('')
+const msgBox = ref(null)
+const aoiArea = ref(0)          // AOI 面积 km²
+const AREA_LIMIT = 500          // 单次下载面积上限 km²
 let toastTimer = null
-function showToast(m) {
-  toast.value = m
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = ''), 3200)
+function showToast(m, kind = 'info') {
+  msgBox.value?.toast(m, kind)
+}
+
+// 经纬度 → 局部米制平面，Shoelace 求面积（km²）
+function ringAreaKm2(ring) {
+  if (!ring || ring.length < 3) return 0
+  const lat0 = ring.reduce((s, p) => s + p[1], 0) / ring.length
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180)
+  const ky = 110540
+  let sum = 0
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i]
+    const [x2, y2] = ring[(i + 1) % ring.length]
+    sum += (x1 * kx) * (y2 * ky) - (x2 * kx) * (y1 * ky)
+  }
+  return Math.abs(sum) / 2 / 1e6
+}
+
+function bboxRing(b) {
+  return [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]]
+}
+
+function setAoiArea(ring, b) {
+  aoiArea.value = ring && ring.length >= 3 ? ringAreaKm2(ring) : ringAreaKm2(bboxRing(b))
+}
+
+function areaBlocked() {
+  if (aoiArea.value <= AREA_LIMIT) return false
+  showToast(`范围 ${aoiArea.value.toFixed(0)} km² 超出上限 ${AREA_LIMIT} km²，请缩小 AOI`, 'error', 3600)
+  logLn(`AOI 面积 ${aoiArea.value.toFixed(1)} km² 超限`)
+  return true
 }
 
 let wsJobWatchers = {}
@@ -167,6 +199,7 @@ function applyFetchedAoi(a) {
   aoiName.value = a.name
   mapRef.value?.fitBbox(bbox.value)
   mapRef.value?.setAoiPolygon(g)
+  setAoiArea(ring, bbox.value)
 }
 function applyAoi(id) {
   const a = aois.value.find(v => v.id === id)
@@ -232,7 +265,12 @@ async function onTaskDownload(j) {
   }
 }
 async function onTaskDelete(j) {
-  if (!window.confirm(`删除 ${j.scene_id} 的全部本地产物（raw/staging/COG/STAC/导出缓存）？`)) return
+  const yes = await msgBox.value?.confirm({
+    title: '删除确认',
+    message: `将删除 ${j.scene_id} 的全部本地产物（raw / staging / COG / STAC / 导出缓存），不可恢复。`,
+    okText: '删除',
+  })
+  if (!yes) return
   try {
     const r = await fetch(`/api/jobs/${j.id}`, { method: 'DELETE' })
     if (r.ok) {
@@ -248,12 +286,14 @@ async function onTaskDelete(j) {
     showToast('删除失败: ' + (e.message || e))
   }
 }
-function onBboxPick(b) {
+function onBboxPick(b, ring) {
+  setAoiArea(ring, b)
   bbox.value = b
   logLn(`AOI=${b.map(v => v.toFixed(3)).join(', ')}`)
 }
 async function onSearch(cfg) {
   if (!ensureBbox()) return
+  if (areaBlocked()) return
   searching.value = true
   groups.value = []
   logLn(`检索 ${cfg.start.slice(0,10)}~${cfg.end.slice(0,10)} 云≤${cfg.cloud}%`)
@@ -345,6 +385,7 @@ function startPreview(s) {
 }
 function startDownload(s) {
   if (!ensureBbox()) return
+  if (areaBlocked()) return
   // 先弹波段选择窗，确认后才开始下载
   bandPick.value = { sid: s.scene_id, provider: s.provider, sentinel: s.collection.includes('sentinel'), scene: s }
 }

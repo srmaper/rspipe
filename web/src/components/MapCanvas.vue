@@ -63,7 +63,7 @@ function acceptRange(ring) {
   map.getCanvas().style.cursor = ''
   map.dragPan.enable()
   emit('draw-state', false)
-  emit('bbox', bbox)
+  emit('bbox', bbox, ring)
 }
 
 onMounted(() => {
