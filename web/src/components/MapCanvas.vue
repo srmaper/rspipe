@@ -368,4 +368,27 @@ defineExpose({
   padding: 4px 12px; font-size: 11px; font-variant-numeric: tabular-nums;
   box-shadow: 0 2px 10px rgba(20,30,45,.10); pointer-events: none;
 }
+
+/* 比例尺：白色圆角卡片 + 上方文字 + 下方带端帽的线段 */
+:deep(.maplibregl-ctrl-scale) {
+  background-color: rgba(255, 255, 255, .96) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 6px 14px 18px !important;
+  color: #1c2534 !important;
+  font-size: 11.5px !important;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  min-width: 76px;
+  box-shadow: 0 2px 10px rgba(20, 30, 45, .12);
+  background-image:
+    linear-gradient(#1c2534, #1c2534),
+    linear-gradient(#1c2534, #1c2534),
+    linear-gradient(#1c2534, #1c2534);
+  background-repeat: no-repeat;
+  background-size: calc(100% - 28px) 2px, 2px 9px, 2px 9px;
+  background-position: left 14px bottom 7px, left 14px bottom 7px, right 14px bottom 7px;
+}
+:deep(.maplibregl-ctrl-bottom-left) { margin-bottom: 6px; }
 </style>
