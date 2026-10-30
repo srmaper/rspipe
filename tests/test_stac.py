@@ -84,9 +84,7 @@ def test_catalog_publisher_roundtrip(stack_file: Path, tmp_path: Path):
 def test_catalog_accumulates_items(stack_file: Path, tmp_path: Path):
     pub = CatalogPublisher(tmp_path / "catalog")
     for i in range(3):
-        it = build_item(
-            scene=_scene(f"S{i}"), cog_path=stack_file, collection_id="reflectance"
-        )
+        it = build_item(scene=_scene(f"S{i}"), cog_path=stack_file, collection_id="reflectance")
         pub.add_item(it, collection_id="reflectance")
     assert len(list(pub.iter_items())) == 3
     assert len(list(pub.iter_items("reflectance"))) == 3

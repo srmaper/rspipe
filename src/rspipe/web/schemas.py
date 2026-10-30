@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class SearchReq(BaseModel):
-    bbox: tuple[float, float, float, float] = Field(..., description="minx,miny,maxx,maxy (EPSG:4326)")
+    bbox: tuple[float, float, float, float] = Field(
+        ..., description="minx,miny,maxx,maxy (EPSG:4326)"
+    )
     start: str | None = Field(None, description="ISO8601 日期，如 2026-09-20")
     end: str | None = Field(None, description="ISO8601 日期")
     cloud: float = Field(30.0, description="整景云量上限 %")

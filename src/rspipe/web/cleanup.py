@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def delete_scene_data(root: Path, provider: str, scene_id: str) -> dict:
-    removed = {"paths": []}
+    removed: dict[str, list[str]] = {"paths": []}
     targets = [
         root / "raw" / provider / scene_id,
         root / "staging" / scene_id,

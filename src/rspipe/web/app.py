@@ -8,6 +8,7 @@ import logging
 import os
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,12 +24,17 @@ from .tiles import render_cog_tile_subrect, render_raster_tile
 
 log = logging.getLogger(__name__)
 
-ROOT = Path(os.environ.get("RSPIPE_ROOT") or Path(__file__).resolve().parents[3])  # 仓库根（打包后可被 RSPIPE_ROOT 覆盖）
+ROOT = Path(
+    os.environ.get("RSPIPE_ROOT") or Path(__file__).resolve().parents[3]
+)  # 仓库根（打包后可被 RSPIPE_ROOT 覆盖）
 DIST = ROOT / "web" / "dist"
 
 PROVIDERS_MAP = {
     "earth-search": ("https://earth-search.aws.element84.com/v1", ["sentinel-2-l2a"]),
-    "planetary-computer": ("https://planetarycomputer.microsoft.com/api/stac/v1", ["landsat-c2-l2"]),
+    "planetary-computer": (
+        "https://planetarycomputer.microsoft.com/api/stac/v1",
+        ["landsat-c2-l2"],
+    ),
 }
 
 
@@ -190,9 +196,10 @@ def bbox_area_km2(geom: dict) -> float:
         xs: list[float] = []
         ys: list[float] = []
         c = geom.get("coordinates")
+        polys: list[Any]
         if geom.get("type") == "Polygon":
             polys = [c]
-        elif geom.get("type") == "MultiPolygon":
+        elif geom.get("type") == "MultiPolygon" and isinstance(c, list):
             polys = c
         else:
             return 0.0
@@ -228,15 +235,21 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     cfg = load_pipeline_config("configs")
-    settings = Settings(_env_file=str(ROOT / ".env") if (ROOT / ".env").exists() else None)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=str(ROOT / ".env") if (ROOT / ".env").exists() else None
+    )
     center = JobCenter(cfg, settings)
-    state = {"pipe": center._pipe, "cfg": cfg}
+    pipe = center._pipe
 
     # ---------- 检索 ----------
     @app.post("/api/search")
     def api_search(req: SearchReq) -> dict:
-        pipe = state["pipe"]
-        bbox = tuple(req.bbox)
+        bbox = (
+            float(req.bbox[0]),
+            float(req.bbox[1]),
+            float(req.bbox[2]),
+            float(req.bbox[3]),
+        )
         if not (bbox[0] < bbox[2] and bbox[1] < bbox[3]):
             raise HTTPException(422, f"bbox 需为 (minx,miny,maxx,maxy) 且有序：{bbox}")
         try:
@@ -246,7 +259,7 @@ def create_app() -> FastAPI:
             raise HTTPException(422, f"日期格式应为 YYYY-MM-DD：{exc}") from exc
         if sd and ed and sd >= ed:
             raise HTTPException(422, f"start 须早于 end：{req.start} >= {req.end}")
-        out = {"bbox": list(bbox), "groups": []}
+        out: dict[str, Any] = {"bbox": list(bbox), "groups": []}
         for prov, coll in req.providers:
             if prov not in PROVIDERS_MAP:
                 continue
@@ -311,7 +324,6 @@ def create_app() -> FastAPI:
     # ---------- 场景详情 ----------
     @app.get("/api/scenes/{provider}/{scene_id}")
     def api_scene(provider: str, scene_id: str) -> dict:
-        pipe = state["pipe"]
         if provider not in PROVIDERS_MAP:
             raise HTTPException(404, f"unknown provider {provider}")
         for _coll in PROVIDERS_MAP[provider][1]:
@@ -327,7 +339,11 @@ def create_app() -> FastAPI:
                     "tier": s.tier,
                     "footprint": s.geometry,
                     "bbox": list(s.bbox) if s.bbox else None,
-                    "properties": {k: v for k, v in s.properties.items() if isinstance(v, (int, float, str, bool, list))},
+                    "properties": {
+                        k: v
+                        for k, v in s.properties.items()
+                        if isinstance(v, (int, float, str, bool, list))
+                    },
                     "bands": [a.key for a in s.assets if a.is_raster],
                     "band_info": _band_info(s),
                     "local_bands": _local_bands(cfg.data_root, provider, scene_id),
@@ -345,7 +361,13 @@ def create_app() -> FastAPI:
             try:
                 g = json.loads(f.read_text(encoding="utf-8"))
                 feat = g["features"][0]
-                out.append({"id": feat.get("properties", {}).get("id", f.stem), "name": feat.get("properties", {}).get("name", f.stem), "geometry": feat["geometry"]})
+                out.append(
+                    {
+                        "id": feat.get("properties", {}).get("id", f.stem),
+                        "name": feat.get("properties", {}).get("name", f.stem),
+                        "geometry": feat["geometry"],
+                    }
+                )
             except Exception:
                 continue
         return out
@@ -407,7 +429,13 @@ def create_app() -> FastAPI:
         try:
             r = httpx.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": q, "format": "jsonv2", "polygon_geojson": 1, "limit": 1, "accept-language": "zh-CN"},
+                params={
+                    "q": q,
+                    "format": "jsonv2",
+                    "polygon_geojson": 1,
+                    "limit": 1,
+                    "accept-language": "zh-CN",
+                },
                 headers={"User-Agent": "rspipe-web/0.1"},
                 timeout=25.0,
             )
@@ -422,8 +450,6 @@ def create_app() -> FastAPI:
             return {}
         area = bbox_area_km2(geom)
         return {"display": h.get("display_name") or q, "geometry": geom, "area_km2": round(area)}
-
-
 
     # ---------- 环境部署 / 服务控制 ----------
     @app.get("/api/system/status")
@@ -462,12 +488,14 @@ def create_app() -> FastAPI:
                 )
                 if not bands:
                     continue
-                out.append({
-                    "scene_id": scene_dir.name,
-                    "provider": prov_dir.name,
-                    "bands": bands,
-                    "bounds": _raw_bounds(cfg.data_root, prov_dir.name, scene_dir.name),
-                })
+                out.append(
+                    {
+                        "scene_id": scene_dir.name,
+                        "provider": prov_dir.name,
+                        "bands": bands,
+                        "bounds": _raw_bounds(cfg.data_root, prov_dir.name, scene_dir.name),
+                    }
+                )
         return out
 
     @app.post("/api/analysis/run")
@@ -517,7 +545,9 @@ def create_app() -> FastAPI:
         data = render_index_tile(Path(cfg.data_root), key, name, z, x, y)
         if data is None:
             return Response(status_code=204)
-        return Response(content=data, media_type="image/png", headers={"Cache-Control": "max-age=3600"})
+        return Response(
+            content=data, media_type="image/png", headers={"Cache-Control": "max-age=3600"}
+        )
 
     # ---------- 瓦片（本地 COG 优先；缺失时直接读云端金字塔层做整景预览） ----------
     @app.get("/api/tiles/{scene_id}/{z}/{x}/{y}.png")
@@ -534,15 +564,22 @@ def create_app() -> FastAPI:
         if cog.exists():
             data = render_cog_tile_subrect(cog, z, x, y, channels)
             if data is not None:
-                return Response(content=data, media_type="image/png", headers={"Cache-Control": "max-age=604800"})
+                return Response(
+                    content=data,
+                    media_type="image/png",
+                    headers={"Cache-Control": "max-age=604800"},
+                )
         # 下载后处理产物：合并 + 重投影到 4326 的预览栅格（快且无投影误差）
         if provider:
             pv = Path(cfg.data_root) / "raw" / provider / scene_id / f"{scene_id}.preview_4326.tif"
             if pv.exists():
                 data = render_raster_tile(pv, z, x, y, channels)
                 if data is not None:
-                    return Response(content=data, media_type="image/png",
-                                    headers={"Cache-Control": "max-age=604800"})
+                    return Response(
+                        content=data,
+                        media_type="image/png",
+                        headers={"Cache-Control": "max-age=604800"},
+                    )
         if provider:
             # 只用已下载的本地 raw 波段；没有就 204（不回源云端）
             from rspipe.web.preview import render_local_tile
@@ -555,7 +592,11 @@ def create_app() -> FastAPI:
                 log.warning("local raw tile failed %s: %s", scene_id, exc)
                 data = None
             if data is not None:
-                return Response(content=data, media_type="image/png", headers={"Cache-Control": "max-age=604800"})
+                return Response(
+                    content=data,
+                    media_type="image/png",
+                    headers={"Cache-Control": "max-age=604800"},
+                )
         return Response(status_code=204)
 
     # ---------- 场景打包导出（COG + STAC json + raw 波段全部） ----------
@@ -629,6 +670,7 @@ def create_app() -> FastAPI:
     if DIST.exists():
         app.mount("/", StaticFiles(directory=str(DIST), html=True), name="web")
     else:
+
         @app.get("/")
         def root() -> dict:
             return {"web": "dist 未构建 —— cd web && npm run build"}

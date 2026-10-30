@@ -68,15 +68,22 @@ def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
         out = {}
         for k, p in paths.items():
             with rasterio.open(p) as src:
-                same = (src.width, src.height) == (width, height) and src.transform == transform and src.crs == crs
+                same = (
+                    (src.width, src.height) == (width, height)
+                    and src.transform == transform
+                    and src.crs == crs
+                )
                 if same:
                     arr = src.read(1).astype("float32")
                 else:
                     arr = np.zeros((height, width), dtype="float32")
                     reproject(
-                        source=rasterio.band(src, 1), destination=arr,
-                        src_transform=src.transform, src_crs=src.crs,
-                        dst_transform=transform, dst_crs=crs,
+                        source=rasterio.band(src, 1),
+                        destination=arr,
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=transform,
+                        dst_crs=crs,
                         resampling=Resampling.bilinear,
                     )
             arr = arr * 2.75e-05 - 0.2 if "landsat" in collection else arr / 10000.0
@@ -132,24 +139,41 @@ def compute_scene_index(
 
     # 输出到 4326
     dst_crs = "EPSG:4326"
-    with rasterio.open(_band_path(raw_dir, scene_id, "red") or _band_path(raw_dir, scene_id, keys[0])) as src0:
+    with rasterio.open(
+        _band_path(raw_dir, scene_id, "red") or _band_path(raw_dir, scene_id, keys[0])
+    ) as src0:
         src_bounds = src0.bounds
     dt, dw, dh = calculate_default_transform(crs, dst_crs, arr.shape[1], arr.shape[0], *src_bounds)
     out = np.full((dh, dw), np.nan, dtype="float32")
     reproject(
-        source=arr, destination=out,
-        src_transform=transform, src_crs=crs,
-        dst_transform=dt, dst_crs=dst_crs,
-        resampling=Resampling.bilinear, dst_nodata=float("nan"),
+        source=arr,
+        destination=out,
+        src_transform=transform,
+        src_crs=crs,
+        dst_transform=dt,
+        dst_crs=dst_crs,
+        resampling=Resampling.bilinear,
+        dst_nodata=float("nan"),
     )
 
     dest_dir = Path(data_root) / "analysis" / scene_id
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{index}.tif"
     with rasterio.open(
-        dest, "w", driver="GTiff", height=dh, width=dw, count=1, dtype="float32",
-        crs=dst_crs, transform=dt, nodata=float("nan"),
-        compress="deflate", tiled=True, blockxsize=512, blockysize=512,
+        dest,
+        "w",
+        driver="GTiff",
+        height=dh,
+        width=dw,
+        count=1,
+        dtype="float32",
+        crs=dst_crs,
+        transform=dt,
+        nodata=float("nan"),
+        compress="deflate",
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
     ) as d:
         d.write(out, 1)
         d.set_band_description(1, index)
@@ -174,7 +198,9 @@ def compute_scene_index(
     return {"ok": True, "stats": stats}
 
 
-def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, threshold: float) -> dict:
+def classify_stats(
+    data_root: Path, provider: str, scene_id: str, index: str, threshold: float
+) -> dict:
     """按阈值统计"大于阈值"的面积（绿地率/水体占比等）。"""
     import rasterio
 
@@ -233,10 +259,14 @@ def compute_change(
         dst = np.full((sa.height, sa.width), np.nan, dtype="float32")
         src_b = sb.read(1).astype("float32")
         reproject(
-            source=src_b, destination=dst,
-            src_transform=sb.transform, src_crs=sb.crs,
-            dst_transform=sa.transform, dst_crs=sa.crs,
-            resampling=Resampling.bilinear, dst_nodata=float("nan"),
+            source=src_b,
+            destination=dst,
+            src_transform=sb.transform,
+            src_crs=sb.crs,
+            dst_transform=sa.transform,
+            dst_crs=sa.crs,
+            resampling=Resampling.bilinear,
+            dst_nodata=float("nan"),
         )
         arr_a = sa.read(1)
         transform, crs = sa.transform, sa.crs
@@ -260,9 +290,20 @@ def compute_change(
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{index}_change.tif"
     with rasterio.open(
-        dest, "w", driver="GTiff", height=diff.shape[0], width=diff.shape[1], count=1,
-        dtype="float32", crs=crs, transform=transform, nodata=float("nan"),
-        compress="deflate", tiled=True, blockxsize=512, blockysize=512,
+        dest,
+        "w",
+        driver="GTiff",
+        height=diff.shape[0],
+        width=diff.shape[1],
+        count=1,
+        dtype="float32",
+        crs=crs,
+        transform=transform,
+        nodata=float("nan"),
+        compress="deflate",
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
     ) as d:
         d.write(diff, 1)
         d.set_band_description(1, f"{index}_change")
@@ -300,12 +341,18 @@ def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: i
     if not f.exists():
         return None
     with rasterio.open(f) as src:
-        plan = plan_tile_window(src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y))
+        plan = plan_tile_window(
+            src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y)
+        )
         if plan is None:
             return None
         (dx0, dy0, dx1, dy1), (col, row, w, h) = plan
-        arr = src.read(1, window=Window(col, row, w, h), out_shape=(dy1 - dy0, dx1 - dx0),
-                       resampling=Resampling.bilinear).astype("float32")
+        arr = src.read(
+            1,
+            window=Window(col, row, w, h),
+            out_shape=(dy1 - dy0, dx1 - dx0),
+            resampling=Resampling.bilinear,
+        ).astype("float32")
 
     is_change = name.endswith("_change")
     valid = np.isfinite(arr)

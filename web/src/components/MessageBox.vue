@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, reactive, ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 
 const confirmState = ref(null)
 const toastState = ref(null)

@@ -58,9 +58,7 @@ def plan_steps(
     want_mosaic: bool = False,
 ) -> list[StepPlan]:
     """推导步骤序列。"""
-    plans: dict[StepName, StepPlan] = {
-        n: StepPlan(name=n, enabled=False) for n in STEP_ORDER
-    }
+    plans: dict[StepName, StepPlan] = {n: StepPlan(name=n, enabled=False) for n in STEP_ORDER}
 
     def enable(name: StepName, reason: str, **params: Any) -> None:
         plans[name] = StepPlan(name=name, enabled=True, reason=reason, params=params or None)

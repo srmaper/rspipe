@@ -112,7 +112,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 14px rgba(56, 189, 248, .65);
   display: inline-block;
 }
-.tag { color: rgba(226, 240, 255, .62); font-size: 12px; }
 .contact {
   margin-left: auto;
   padding: 5px 12px;

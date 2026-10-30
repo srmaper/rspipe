@@ -19,8 +19,15 @@ log = get_logger("rspipe.pipeline.scheduler")
 def build_cron_trigger(cron: dict[str, Any]) -> CronTrigger:
     """从配置里的 cron 映射构造 CronTrigger。"""
     allowed = {
-        "year", "month", "day", "week", "day_of_week",
-        "hour", "minute", "second", "timezone",
+        "year",
+        "month",
+        "day",
+        "week",
+        "day_of_week",
+        "hour",
+        "minute",
+        "second",
+        "timezone",
     }
     kwargs = {k: v for k, v in (cron or {}).items() if k in allowed and v is not None}
     if not kwargs:

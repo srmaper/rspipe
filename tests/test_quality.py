@@ -134,9 +134,18 @@ def test_aoi_cloud_fraction_tolerates_float_qa(tmp_path: Path):
     rng = np.random.default_rng(0)
     arr = np.where(rng.random((64, 64)) < 0.2, 21452, 21848).astype("float32")
     with rasterio.open(
-        path, "w", driver="GTiff", height=64, width=64, count=1, dtype="float32",
-        crs="EPSG:4326", transform=from_origin(116.0, 40.0, 0.001, 0.001), tiled=True,
-        blockxsize=32, blockysize=32,
+        path,
+        "w",
+        driver="GTiff",
+        height=64,
+        width=64,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(116.0, 40.0, 0.001, 0.001),
+        tiled=True,
+        blockxsize=32,
+        blockysize=32,
     ) as ds:
         ds.write(arr, 1)
     scene = _qa_scene(path)
@@ -148,8 +157,13 @@ def test_aoi_cloud_fraction_tolerates_float_qa(tmp_path: Path):
 def test_aoi_cloud_fraction_uses_cogreader_when_remote(tmp_path: Path):
     """http(s) href 时必须走 CogReader 路径（ downsized 读取），不崩即可。"""
     qa = make_qa_pixel(
-        tmp_path / "qa2.tif", width=64, height=64, origin=(116.0, 40.0),
-        res=0.001, cloud_fraction=0.2, seed=7,
+        tmp_path / "qa2.tif",
+        width=64,
+        height=64,
+        origin=(116.0, 40.0),
+        res=0.001,
+        cloud_fraction=0.2,
+        seed=7,
     )
     scene = _qa_scene(qa)
     # 本地文件同样走 CogReader 分支（text 非 http 则用 rasterio；这里测 CogReader 分支）
@@ -161,12 +175,17 @@ def test_aoi_cloud_fraction_uses_cogreader_when_remote(tmp_path: Path):
 
 
 # ── 排序 ─────────────────────────────────────────────────────────────────────
-def _rank_scene(sid: str, *, bbox: tuple[float, float, float, float],
-                cloud: float | None, tier: str | None) -> SceneMeta:
+def _rank_scene(
+    sid: str, *, bbox: tuple[float, float, float, float], cloud: float | None, tier: str | None
+) -> SceneMeta:
     return SceneMeta(
-        scene_id=sid, provider="p", collection="c",
-        datetime=datetime(2026, 1, 1, tzinfo=UTC), bbox=bbox,
-        cloud_cover=cloud, tier=tier,
+        scene_id=sid,
+        provider="p",
+        collection="c",
+        datetime=datetime(2026, 1, 1, tzinfo=UTC),
+        bbox=bbox,
+        cloud_cover=cloud,
+        tier=tier,
         properties=({"landsat:collection_category": tier} if tier else {}),
     )
 
@@ -294,11 +313,21 @@ def test_qa_asset_prefers_cloud_role_over_data_mask():
     from rspipe.bands import BandResolver
 
     scene = SceneMeta(
-        scene_id="S", provider="p", collection="c",
-        datetime=datetime(2026, 1, 1, tzinfo=UTC), bbox=(0, 0, 1, 1),
+        scene_id="S",
+        provider="p",
+        collection="c",
+        datetime=datetime(2026, 1, 1, tzinfo=UTC),
+        bbox=(0, 0, 1, 1),
         assets=[
-            AssetRef(key="qa_aerosol", href="x1", media_type="image/tiff", roles=("data-mask", "water-mask")),
-            AssetRef(key="qa_pixel", href="x2", media_type="image/tiff", roles=("cloud", "cloud-shadow")),
+            AssetRef(
+                key="qa_aerosol",
+                href="x1",
+                media_type="image/tiff",
+                roles=("data-mask", "water-mask"),
+            ),
+            AssetRef(
+                key="qa_pixel", href="x2", media_type="image/tiff", roles=("cloud", "cloud-shadow")
+            ),
         ],
     )
     r = BandResolver(scene, None)

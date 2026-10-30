@@ -39,8 +39,15 @@ def test_render_tile_from_synthetic_cog(tmp_path):
     stack = np.repeat(arr, 4, axis=0)
     plain = tmp_path / "plain.tif"
     with rasterio.open(
-        plain, "w", driver="GTiff", height=h, width=w, count=4,
-        dtype="float32", crs="EPSG:32650", transform=transform,
+        plain,
+        "w",
+        driver="GTiff",
+        height=h,
+        width=w,
+        count=4,
+        dtype="float32",
+        crs="EPSG:32650",
+        transform=transform,
     ) as dst:
         dst.write(stack)
     cog = tmp_path / "cog.tif"

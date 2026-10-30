@@ -88,10 +88,16 @@ def scaling_from_mtl(path: Path, bands: list[str]) -> ScalingSet:
         if not num:
             continue
         # L2 地表反射率优先
-        mult = meta.get(f"REFLECTANCE_MULT_BAND_{num}") or meta.get(f"REFLECTANCE_MULT_BAND_{int(num)}")
-        add = meta.get(f"REFLECTANCE_ADD_BAND_{num}") or meta.get(f"REFLECTANCE_ADD_BAND_{int(num)}")
+        mult = meta.get(f"REFLECTANCE_MULT_BAND_{num}") or meta.get(
+            f"REFLECTANCE_MULT_BAND_{int(num)}"
+        )
+        add = meta.get(f"REFLECTANCE_ADD_BAND_{num}") or meta.get(
+            f"REFLECTANCE_ADD_BAND_{int(num)}"
+        )
         if mult is None:
-            mult = meta.get(f"RADIANCE_MULT_BAND_{num}") or meta.get(f"RADIANCE_MULT_BAND_{int(num)}")
+            mult = meta.get(f"RADIANCE_MULT_BAND_{num}") or meta.get(
+                f"RADIANCE_MULT_BAND_{int(num)}"
+            )
             add = meta.get(f"RADIANCE_ADD_BAND_{num}") or meta.get(f"RADIANCE_ADD_BAND_{int(num)}")
         if mult is None:
             continue
@@ -118,13 +124,18 @@ def parse_mtd_xml(path: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for el in root.iter():
         tag = el.tag.split("}")[-1]
-        if tag in (
-            "QUANTIFICATION_VALUE",
-            "BOA_ADD_OFFSET",
-            "RADIO_ADD_OFFSET",
-            "U",
-            "Solar_Irradiance",
-        ) and el.text and el.text.strip():
+        if (
+            tag
+            in (
+                "QUANTIFICATION_VALUE",
+                "BOA_ADD_OFFSET",
+                "RADIO_ADD_OFFSET",
+                "U",
+                "Solar_Irradiance",
+            )
+            and el.text
+            and el.text.strip()
+        ):
             try:
                 out[tag] = float(el.text.strip())
             except ValueError:
@@ -137,8 +148,19 @@ def parse_mtd_xml(path: Path) -> dict[str, Any]:
 
 # S2 L2A 13 波段顺序（与 BOA_ADD_OFFSET_LIST 对齐）
 _S2_BAND_ORDER = [
-    "B01", "B02", "B03", "B04", "B05", "B06", "B07",
-    "B08", "B8A", "B09", "B10", "B11", "B12",
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B8A",
+    "B09",
+    "B10",
+    "B11",
+    "B12",
 ]
 
 
@@ -201,8 +223,12 @@ def scaling_from_stac(scene: SceneMeta, spec: SensorSpec, bands: list[str]) -> S
         if not num:
             continue
         for prefix in ("landsat:reflectance", "landsat:radiance", "s2:reflectance"):
-            mult = props.get(f"{prefix}_mult_band_{num}") or props.get(f"{prefix}_mult_band_{int(num)}")
-            add = props.get(f"{prefix}_add_band_{num}") or props.get(f"{prefix}_add_band_{int(num)}")
+            mult = props.get(f"{prefix}_mult_band_{num}") or props.get(
+                f"{prefix}_mult_band_{int(num)}"
+            )
+            add = props.get(f"{prefix}_add_band_{num}") or props.get(
+                f"{prefix}_add_band_{int(num)}"
+            )
             if mult is not None:
                 by_band[band] = BandScaling(
                     band=band,

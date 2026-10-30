@@ -40,7 +40,9 @@ def _boot(config_dir: str, env_file: str, data_root: str | None) -> Any:
     from rspipe.config import Settings
 
     configure_logging(cfg.logging.level, json_logs=cfg.logging.json_logs)
-    settings = Settings(_env_file=env_file if Path(env_file).exists() else None)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=env_file if Path(env_file).exists() else None
+    )
     return cfg, settings
 
 
@@ -105,7 +107,9 @@ def cmd_search(
                     geometry=geom if bb is None else None,
                     start=start_dt,
                     end=end_dt,
-                    max_cloud_cover=cloud if cloud is not None else pipe.config.pipeline.max_cloud_cover,
+                    max_cloud_cover=cloud
+                    if cloud is not None
+                    else pipe.config.pipeline.max_cloud_cover,
                     max_items=limit,
                 )
                 scenes.extend(found)
@@ -113,7 +117,8 @@ def cmd_search(
                 err_console.print(f"[yellow]warn[/yellow] {name}: {exc}")
 
         if bb is not None and cloud_aoi is not None:
-            ranked = rank_scenes(scenes, bb, prefer_tier1=True, min_overlap=0.01)
+            bb4 = (float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3]))
+            ranked = rank_scenes(scenes, bb4, prefer_tier1=True, min_overlap=0.01)
             thresh = cloud_aoi / 100.0
             kept = [r for r in ranked if r.aoi_cloud is None or r.aoi_cloud <= thresh]
             console.print(
@@ -357,9 +362,9 @@ def _print_ranked(ranked: list[Any]) -> None:
         table.add_row(
             s.scene_id,
             r.tier or "-",
-            f"{r.aoi_cloud*100:.2f}" if r.aoi_cloud is not None else "n/a",
+            f"{r.aoi_cloud * 100:.2f}" if r.aoi_cloud is not None else "n/a",
             f"{s.cloud_cover:.2f}" if s.cloud_cover is not None else "-",
-            f"{r.overlap*100:.1f}",
+            f"{r.overlap * 100:.1f}",
             s.provider,
         )
     console.print(table)
@@ -378,8 +383,8 @@ def _print_report(report: Any) -> None:
             r.scene_id,
             r.status,
             "-",
-            f"{r.aoi_cloud_cover*100:.1f}" if r.aoi_cloud_cover is not None else "-",
-            f"{r.valid_fraction*100:.1f}" if r.valid_fraction is not None else "-",
+            f"{r.aoi_cloud_cover * 100:.1f}" if r.aoi_cloud_cover is not None else "-",
+            f"{r.valid_fraction * 100:.1f}" if r.valid_fraction is not None else "-",
             f"{sum(x.elapsed_s for x in r.steps):.1f}s",
         )
     console.print(table)

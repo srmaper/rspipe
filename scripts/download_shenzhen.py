@@ -66,7 +66,7 @@ def main() -> None:
             print(f"\n[{provider}/{coll}] {len(scored)} candidates", flush=True)
             for s in scored[:3]:
                 print(
-                    f"   overlap={overlap(s.geometry)*100:5.1f}% cloud={s.cloud_cover:5.2f}%  {s.scene_id}",
+                    f"   overlap={overlap(s.geometry) * 100:5.1f}% cloud={s.cloud_cover:5.2f}%  {s.scene_id}",
                     flush=True,
                 )
             target = WANT.get(coll)
@@ -96,7 +96,7 @@ def main() -> None:
         t = time.time()
         result = SceneProcessor(ctx).run(force=True)
         results[coll] = result
-        print(f"TOTAL {time.time()-t:.1f}s status={result.status}", flush=True)
+        print(f"TOTAL {time.time() - t:.1f}s status={result.status}", flush=True)
         for st in result.steps:
             print(f"   {st.name:22s} {st.status:8s} {st.elapsed_s:6.1f}s", flush=True)
         if result.error:

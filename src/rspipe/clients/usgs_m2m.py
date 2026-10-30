@@ -37,7 +37,7 @@ _M2M_API = "https://m2m.cr.usgs.gov/api/api/json/stable/"
 
 def _require_xplore() -> Any:
     try:
-        from usgsxplore import USGS  # type: ignore[import-not-found]
+        from usgsxplore import USGS
     except ImportError as exc:
         raise CredentialError(
             "usgsxplore is required for the USGS M2M provider; "
@@ -55,8 +55,7 @@ class UsgsM2MClient:
         self.settings = settings
         if not settings.usgs_m2m_username or not settings.usgs_m2m_token:
             raise CredentialError(
-                "USGS M2M requires USGS_M2M_USERNAME and USGS_M2M_TOKEN "
-                "(see .env.example)"
+                "USGS M2M requires USGS_M2M_USERNAME and USGS_M2M_TOKEN (see .env.example)"
             )
         self._auth = StaticTokenAuth(settings.usgs_m2m_token)
         self._api: Any | None = None
@@ -85,7 +84,10 @@ class UsgsM2MClient:
         end: datetime | None = None,
         max_cloud_cover: float | None = None,
         max_items: int | None = None,
+        ids: list[str] | None = None,
     ) -> list[SceneMeta]:
+        if ids:
+            raise SearchError("usgs_m2m: search by ids is not supported")
         if bbox is None and geometry is None:
             raise SearchError("usgs_m2m: bbox or geometry required")
 
@@ -160,9 +162,7 @@ class UsgsM2MClient:
             if "l2" in dataset.lower() or "sr" in dataset.lower()
             else ProductLevel.L1
         )
-        radiometry = (
-            Radiometry.SURFACE_REFLECTANCE if level is ProductLevel.L2 else Radiometry.TOA
-        )
+        radiometry = Radiometry.SURFACE_REFLECTANCE if level is ProductLevel.L2 else Radiometry.TOA
         return SceneMeta(
             scene_id=str(raw.get("displayId") or raw.get("entityId") or raw.get("id")),
             provider=self.name,
@@ -200,7 +200,7 @@ class UsgsM2MClient:
         *,
         mode: FetchMode | None = None,
         bbox: tuple[float, float, float, float] | None = None,
-    ) -> Path:
+    ) -> str | Path:
         if mode is FetchMode.VSI:
             return fetch_asset(asset, dest, auth=self._auth, mode=mode, bbox=bbox)
         if not asset.href:

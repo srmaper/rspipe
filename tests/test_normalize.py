@@ -51,8 +51,15 @@ def test_normalize_dn_applies_scaling(tmp_path: Path):
     data = np.full((1, 8, 8), 10000, dtype="uint16")
     src = tmp_path / "dn.tif"
     with rasterio.open(
-        src, "w", driver="GTiff", height=8, width=8, count=1, dtype="uint16",
-        crs="EPSG:4326", transform=rasterio.transform.from_origin(0, 1, 0.1, 0.1),
+        src,
+        "w",
+        driver="GTiff",
+        height=8,
+        width=8,
+        count=1,
+        dtype="uint16",
+        crs="EPSG:4326",
+        transform=rasterio.transform.from_origin(0, 1, 0.1, 0.1),
     ) as ds:
         ds.write(data)
 

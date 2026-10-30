@@ -105,9 +105,17 @@ class JobCenter:
             con.execute(
                 "INSERT OR REPLACE INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
-                    job.id, job.kind, job.scene_id, job.provider, job.collection,
-                    _json.dumps(list(job.aoi_bbox)), job.status, job.progress,
-                    job.message, _json.dumps(job.detail), job.created,
+                    job.id,
+                    job.kind,
+                    job.scene_id,
+                    job.provider,
+                    job.collection,
+                    _json.dumps(list(job.aoi_bbox)),
+                    job.status,
+                    job.progress,
+                    job.message,
+                    _json.dumps(job.detail),
+                    job.created,
                 ),
             )
             con.commit()
@@ -141,9 +149,17 @@ class JobCenter:
         for r in rows:
             try:
                 job = Job(
-                    id=r[0], kind=r[1], scene_id=r[2], provider=r[3], collection=r[4],
-                    aoi_bbox=tuple(_json.loads(r[5])), status=r[6], progress=r[7],
-                    message=r[8], detail=_json.loads(r[9] or "{}"), created=r[10],
+                    id=r[0],
+                    kind=r[1],
+                    scene_id=r[2],
+                    provider=r[3],
+                    collection=r[4],
+                    aoi_bbox=tuple(_json.loads(r[5])),
+                    status=r[6],
+                    progress=r[7],
+                    message=r[8],
+                    detail=_json.loads(r[9] or "{}"),
+                    created=r[10],
                 )
                 # 服务重启时被打断的任务标记为失败（重试按钮仍在景卡片）
                 if job.status in ("queued", "running"):
@@ -171,8 +187,11 @@ class JobCenter:
     def submit(self, req) -> Job:
         # 同景 processed/raw 任务去重：并发跑同一 SceneProcessor 互相踩 staging 文件
         active = [
-            j for j in self.jobs.values()
-            if j.scene_id == req.scene_id and j.kind == req.type and j.status in ("queued", "running")
+            j
+            for j in self.jobs.values()
+            if j.scene_id == req.scene_id
+            and j.kind == req.type
+            and j.status in ("queued", "running")
         ]
         if active:
             j = active[0]
@@ -180,7 +199,8 @@ class JobCenter:
             return j
         # 清掉同景同类型的旧终态记录，避免列表堆积重复失败项
         stale = [
-            jid for jid, j in self.jobs.items()
+            jid
+            for jid, j in self.jobs.items()
             if j.scene_id == req.scene_id and j.kind == req.type and j.status in ("ok", "error")
         ]
         for jid in stale:
@@ -263,7 +283,12 @@ class JobCenter:
                     spec=self._pipe._spec_for(scene),
                     band_names=tuple(self._cfg.pipeline.bands),
                     collection_id="default",
-                    aoi_bbox=tuple(job.aoi_bbox),
+                    aoi_bbox=(
+                        float(job.aoi_bbox[0]),
+                        float(job.aoi_bbox[1]),
+                        float(job.aoi_bbox[2]),
+                        float(job.aoi_bbox[3]),
+                    ),
                 )
                 import rspipe.pipeline.steps as steps_mod
                 from rspipe.ingest.fetcher import fetch_asset as real_fetch
@@ -272,7 +297,9 @@ class JobCenter:
                 orig = steps_mod.fetch_asset
 
                 def fake(asset, dest, *, auth=None, mode=None, bbox=None, timeout=120.0):
-                    p = local_raw(self._layout, job.provider, job.scene_id, getattr(asset, "key", ""))
+                    p = local_raw(
+                        self._layout, job.provider, job.scene_id, getattr(asset, "key", "")
+                    )
                     if p:
                         return str(p)
                     return real_fetch(asset, dest, auth=auth, mode=mode, bbox=bbox, timeout=timeout)
@@ -300,6 +327,9 @@ class JobCenter:
             job.progress = min(1.0, max(job.progress, f))
             job.message = m
         # 节流落盘：0.02 进度或终态才写库
-        if job.status in ('ok', 'error') or abs(job.progress - job.detail.get('saved_prog', 0)) >= 0.02:
-            job.detail['saved_prog'] = job.progress
+        if (
+            job.status in ("ok", "error")
+            or abs(job.progress - job.detail.get("saved_prog", 0)) >= 0.02
+        ):
+            job.detail["saved_prog"] = job.progress
             self._db_save(job)

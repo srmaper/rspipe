@@ -248,7 +248,9 @@ def render_remote_tile(
         scale = (lv.width / info.width) if lv else 1.0
         w_lv = lv.width if lv else info.width
         h_lv = lv.height if lv else info.height
-        plan = plan_tile_window(bounds, f"EPSG:{info.epsg}", info.transform, w_lv, h_lv, b, level_scale=scale)
+        plan = plan_tile_window(
+            bounds, f"EPSG:{info.epsg}", info.transform, w_lv, h_lv, b, level_scale=scale
+        )
         if plan is None:
             continue
         (dx0, dy0, dx1, dy1), (col, row, w, h) = plan
@@ -256,10 +258,12 @@ def render_remote_tile(
         if arr.size == 0:
             continue
         img = Image.fromarray(np.nan_to_num(arr.astype("float32"), nan=0.0), mode="F")
-        img = img.resize((dx1 - dx0, dy1 - dy0), Image.BILINEAR)
+        img = img.resize((dx1 - dx0, dy1 - dy0), Image.Resampling.BILINEAR)
         canvas[i, dy0:dy1, dx0:dx1] = _dn_to_refl(np.asarray(img, dtype="float32"), collection)
         got_any = True
     if not got_any:
         return None
-    rgb, valid = _compose(channels, [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]])
+    rgb, valid = _compose(
+        channels, [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]]
+    )
     return _png(rgb, valid)

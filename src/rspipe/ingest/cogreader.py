@@ -43,23 +43,31 @@ TAG_SAMPLE_FORMAT = 339
 
 # TIFF type -> (struct fmt char, size)
 _TYPES: dict[int, tuple[str, int]] = {
-    1: ("B", 1),   # BYTE
-    2: ("s", 1),   # ASCII
-    3: ("H", 2),   # SHORT
-    4: ("I", 4),   # LONG
+    1: ("B", 1),  # BYTE
+    2: ("s", 1),  # ASCII
+    3: ("H", 2),  # SHORT
+    4: ("I", 4),  # LONG
     5: ("II", 8),  # RATIONAL
-    6: ("b", 1),   # SBYTE
-    7: ("B", 1),   # UNDEFINED
-    8: ("h", 2),   # SSHORT
-    9: ("i", 4),   # SLONG
+    6: ("b", 1),  # SBYTE
+    7: ("B", 1),  # UNDEFINED
+    8: ("h", 2),  # SSHORT
+    9: ("i", 4),  # SLONG
     11: ("f", 4),  # FLOAT
     12: ("d", 8),  # DOUBLE
 }
 
 _SAMPLE_DTYPES = {
-    (1, 8): "uint8", (1, 16): "uint16", (1, 32): "uint32", (1, 64): "uint64",
-    (2, 8): "int8", (2, 16): "int16", (2, 32): "int32", (2, 64): "int64",
-    (3, 16): "float16", (3, 32): "float32", (3, 64): "float64",
+    (1, 8): "uint8",
+    (1, 16): "uint16",
+    (1, 32): "uint32",
+    (1, 64): "uint64",
+    (2, 8): "int8",
+    (2, 16): "int16",
+    (2, 32): "int32",
+    (2, 64): "int64",
+    (3, 16): "float16",
+    (3, 32): "float32",
+    (3, 64): "float64",
 }
 
 
@@ -238,7 +246,9 @@ class CogReader:
     def _read_ifd(self, offset: int, order: str, depth: int = 0) -> dict[int, Any]:
         return self._read_ifd_entries(offset, order, depth)[0]
 
-    def _read_ifd_entries(self, offset: int, order: str, depth: int = 0) -> tuple[dict[int, Any], int]:
+    def _read_ifd_entries(
+        self, offset: int, order: str, depth: int = 0
+    ) -> tuple[dict[int, Any], int]:
         """读单个 IFD 的 tag 表，返回 (entries, 下一个 IFD 偏移)。"""
         if depth > 6 or offset <= 0:
             return {}, 0
@@ -315,7 +325,9 @@ class CogReader:
                 break
         return best
 
-    def read_window_level(self, level: int, col_off: int, row_off: int, width: int, height: int) -> np.ndarray:
+    def read_window_level(
+        self, level: int, col_off: int, row_off: int, width: int, height: int
+    ) -> np.ndarray:
         """在指定金字塔层上读窗口。"""
         levels = self.levels
         if not levels:
@@ -397,7 +409,9 @@ class CogReader:
         if fmt_char == "II":  # RATIONAL
             count = total // 8
             parts = struct.unpack(order + "II" * count, buf[: count * 8])
-            return [parts[i] / parts[i + 1] if parts[i + 1] else 0.0 for i in range(0, len(parts), 2)]
+            return [
+                parts[i] / parts[i + 1] if parts[i + 1] else 0.0 for i in range(0, len(parts), 2)
+            ]
         count = total // size
         return list(struct.unpack(order + fmt_char * count, buf[: count * size]))
 
@@ -514,9 +528,7 @@ class CogReader:
 
         minx, miny, maxx, maxy = bbox
         if info.epsg and info.epsg != bbox_epsg:
-            minx, miny, maxx, maxy = _reproject_bbox(
-                (minx, miny, maxx, maxy), bbox_epsg, info.epsg
-            )
+            minx, miny, maxx, maxy = _reproject_bbox((minx, miny, maxx, maxy), bbox_epsg, info.epsg)
 
         a, b, c, d, e, f = info.transform
         # 假设无旋转（b == d == 0）
@@ -564,7 +576,9 @@ def _reproject_bbox(
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def _geotransform(entries: dict[int, Any]) -> tuple[float, float, float, float, float, float] | None:
+def _geotransform(
+    entries: dict[int, Any],
+) -> tuple[float, float, float, float, float, float] | None:
     """从 ModelPixelScale(33550) + ModelTiepoint(33922) 推导仿射变换。"""
     scale = entries.get(33550)
     tie = entries.get(33922)

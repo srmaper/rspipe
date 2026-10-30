@@ -49,7 +49,9 @@ def band_stats(arr: np.ndarray, band_name: str = "") -> BandStats:
     data = arr.astype("float64").ravel()
     data = data[np.isfinite(data)]
     if data.size == 0:
-        return BandStats(band_name, float("nan"), float("nan"), float("nan"), float("nan"), float("nan"), 0)
+        return BandStats(
+            band_name, float("nan"), float("nan"), float("nan"), float("nan"), float("nan"), 0
+        )
     p02, p50, p98 = np.percentile(data, [2.0, 50.0, 98.0])
     return BandStats(
         band=band_name,
@@ -177,7 +179,7 @@ def choose_reference(
         return str(scenes[0]["scene_id"])
 
     def score(s: dict[str, Any]) -> tuple[float, float]:
-        cloud = float(s.get("cloud_cover") if s.get("cloud_cover") is not None else 100.0)
+        cloud = float(s.get("cloud_cover") or 100.0)
         valid = float(s.get("valid_fraction", 0.0))
         return (cloud, -valid)
 
@@ -202,9 +204,7 @@ def balance_scene(
     if arr.ndim != 3 or reference.ndim != 3:
         raise ColorBalanceError("balance_scene: expected (bands,H,W)")
     if arr.shape != reference.shape:
-        raise ColorBalanceError(
-            f"balance_scene: shape mismatch {arr.shape} vs {reference.shape}"
-        )
+        raise ColorBalanceError(f"balance_scene: shape mismatch {arr.shape} vs {reference.shape}")
     if method == "none":
         return arr.astype("float32", copy=True), {}
 

@@ -88,6 +88,7 @@ class Pipeline:
     # ── 检索 ──────────────────────────────────────────────────────────────
     def discover(self, *, force_full: bool = False) -> list[SceneMeta]:
         """按水位线增量检索新景。"""
+        aoi_bbox: tuple[float, float, float, float] | None
         if self._cli_bbox is not None:
             aoi_geom, aoi_bbox = None, self._cli_bbox
         else:
@@ -281,10 +282,7 @@ class Pipeline:
                 min_overlap=0.01,
             )
             thresh = aoi_cloud_max
-            scenes = [
-                r.scene for r in ranked
-                if r.aoi_cloud is not None and r.aoi_cloud <= thresh
-            ]
+            scenes = [r.scene for r in ranked if r.aoi_cloud is not None and r.aoi_cloud <= thresh]
             log.info(
                 "run.filter-aoi-cloud",
                 max=aoi_cloud_max,
@@ -405,7 +403,9 @@ class Pipeline:
         if scene_ids:
             wanted = set(scene_ids)
             records = [r for r in records if r.scene_id in wanted]
-        records = [r for r in records if r.status == "ok" and r.cog_path and Path(r.cog_path).exists()]
+        records = [
+            r for r in records if r.status == "ok" and r.cog_path and Path(r.cog_path).exists()
+        ]
 
         if not records:
             raise PipelineError("no processed scenes available for mosaicking")

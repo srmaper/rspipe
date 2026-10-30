@@ -37,8 +37,19 @@ TARGETS = [
 ]
 
 RAW_KEYS_S2 = [
-    "coastal", "blue", "green", "red", "rededge1", "rededge2", "rededge3",
-    "nir", "nir08", "nir09", "swir16", "swir22", "scl",
+    "coastal",
+    "blue",
+    "green",
+    "red",
+    "rededge1",
+    "rededge2",
+    "rededge3",
+    "nir",
+    "nir08",
+    "nir09",
+    "swir16",
+    "swir22",
+    "scl",
 ]
 RAW_KEYS_LS = ["coastal", "blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel"]
 
@@ -81,7 +92,7 @@ def _raw_one_band(sid, key, asset, out_dir, block_size):
         dst.write(data, 1)
         dst.set_band_description(1, key)
     mb = dest.stat().st_size / 1e6
-    return f"    {key:10s} {w:5d}x{h:<5d} {mb:7.2f} MB  {time.time()-t:5.1f}s"
+    return f"    {key:10s} {w:5d}x{h:<5d} {mb:7.2f} MB  {time.time() - t:5.1f}s"
 
 
 def download_raw(pipe, sid, prov, coll, layout, block_size=(1 << 23), workers=6):
@@ -89,7 +100,10 @@ def download_raw(pipe, sid, prov, coll, layout, block_size=(1 << 23), workers=6)
     keys = RAW_KEYS_S2 if "sentinel" in coll else RAW_KEYS_LS
     out_dir = layout.raw_scene_dir(prov, sid)
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\n--- RAW {scene.scene_id} -> {out_dir}  (block={block_size>>20}MB x {workers} threads)", flush=True)
+    print(
+        f"\n--- RAW {scene.scene_id} -> {out_dir}  (block={block_size >> 20}MB x {workers} threads)",
+        flush=True,
+    )
     t0 = time.time()
     futs = {}
     with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -105,7 +119,7 @@ def download_raw(pipe, sid, prov, coll, layout, block_size=(1 << 23), workers=6)
             except Exception as e:
                 print(f"    {futs[fu]:10s} FAILED: {e}", flush=True)
     written = list(out_dir.glob(f"{sid}.*.tif"))
-    print(f"    [{time.time()-t0:.0f}s total] {len(written)}/{len(keys)} files", flush=True)
+    print(f"    [{time.time() - t0:.0f}s total] {len(written)}/{len(keys)} files", flush=True)
 
 
 def make_local_fetcher(layout, prov, sid):
@@ -127,7 +141,7 @@ def process_fast(pipe, prov, coll, sid, cfg, layout):
     steps_mod.fetch_asset = make_local_fetcher(layout, prov, sid)
     aoi_cloud = aoi_cloud_fraction(scene, XA)
     if aoi_cloud is not None:
-        print(f"\n--- PROCESSED {sid} (AOI云={aoi_cloud*100:.2f}%)", flush=True)
+        print(f"\n--- PROCESSED {sid} (AOI云={aoi_cloud * 100:.2f}%)", flush=True)
     ctx = SceneContext(
         scene=scene,
         config=cfg,
@@ -140,14 +154,14 @@ def process_fast(pipe, prov, coll, sid, cfg, layout):
     )
     t = time.time()
     result = SceneProcessor(ctx).run(force=False)
-    print(f"TOTAL {time.time()-t:.1f}s status={result.status}", flush=True)
+    print(f"TOTAL {time.time() - t:.1f}s status={result.status}", flush=True)
     for st in result.steps:
         print(f"    {st.name:20s} {st.status:8s} {st.elapsed_s:6.1f}s", flush=True)
     if result.error:
         print("    ERROR:", result.error, flush=True)
     for label, p in (("COG", result.cog_path), ("STAC", result.stac_item_path)):
         if p and Path(p).exists():
-            print(f"    {label} {Path(p).stat().st_size/1e6:8.2f} MB  {p}", flush=True)
+            print(f"    {label} {Path(p).stat().st_size / 1e6:8.2f} MB  {p}", flush=True)
 
 
 def main() -> None:

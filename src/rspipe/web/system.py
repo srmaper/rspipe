@@ -27,8 +27,14 @@ def _run(cmd: list[str], cwd: Path) -> int:
     _add("$ " + " ".join(cmd))
     try:
         p = subprocess.Popen(
-            cmd, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace", shell=False,
+            cmd,
+            cwd=str(cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            shell=False,
         )
         assert p.stdout is not None
         for line in p.stdout:
@@ -57,7 +63,11 @@ def env_status() -> dict:
         "python_ok": sys.version_info >= (3, 11),
         "deps": deps,
         "deps_ok": all(deps.values()),
-        "node": (subprocess.run([node, "-v"], capture_output=True, text=True).stdout.strip() if node else None),
+        "node": (
+            subprocess.run([node, "-v"], capture_output=True, text=True).stdout.strip()
+            if node
+            else None
+        ),
         "npm": bool(npm),
         "dist_ok": dist,
         "setup_running": _state["running"],
@@ -108,6 +118,8 @@ def restart_service() -> dict:
         flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
     subprocess.Popen(
         ["cmd", "/c", f'timeout /t 2 >nul & "{cmd}"'],
-        cwd=str(ROOT), creationflags=flags, close_fds=True,
+        cwd=str(ROOT),
+        creationflags=flags,
+        close_fds=True,
     )
     return {"ok": True, "restarting": True}

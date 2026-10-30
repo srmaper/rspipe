@@ -148,7 +148,9 @@ class BandResolver:
         return [a for a in self.scene.assets if "metadata" in a.roles or not a.is_raster]
 
 
-def resolve_band_map(scene: SceneMeta, spec: SensorSpec | None, commons: Iterable[str]) -> dict[str, AssetRef]:
+def resolve_band_map(
+    scene: SceneMeta, spec: SensorSpec | None, commons: Iterable[str]
+) -> dict[str, AssetRef]:
     return BandResolver(scene, spec).data_assets(commons)
 
 

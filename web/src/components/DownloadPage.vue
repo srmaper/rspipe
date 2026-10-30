@@ -504,7 +504,6 @@ defineEmits(['home'])
 }
 #bar .brand { font-size: 14px; font-weight: 700; letter-spacing: .5px; display: flex; align-items: center; gap: 9px; }
 #bar .brand i { width: 20px; height: 20px; border-radius: 6px; flex: none; background: linear-gradient(135deg, var(--accent), #22d3ee); display: inline-block; }
-#bar .tag { color: var(--muted); font-size: 11.5px; }
 #bar .sp { flex: 1; }
 #top { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; }
 #left { width: 276px; flex: none; display: flex; flex-direction: column; gap: 12px; overflow: auto; }

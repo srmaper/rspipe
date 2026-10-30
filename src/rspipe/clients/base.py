@@ -27,6 +27,7 @@ class ProviderClient(Protocol):
         end: datetime | None = None,
         max_cloud_cover: float | None = None,
         max_items: int | None = None,
+        ids: list[str] | None = None,
     ) -> list[SceneMeta]:
         """按空间/时间/云量检索景。"""
         ...
@@ -42,7 +43,7 @@ class ProviderClient(Protocol):
         *,
         mode: FetchMode | None = None,
         bbox: tuple[float, float, float, float] | None = None,
-    ) -> Path:
+    ) -> str | Path:
         """把资产落到本地（或返回可被 rasterio 打开的 VSI 路径）。"""
         ...
 

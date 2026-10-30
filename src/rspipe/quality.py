@@ -72,7 +72,9 @@ def aoi_cloud_fraction(
     返回 None 表示无法度量（无 QA 资产 / 无法读取）。
     只读 QA 瓦片，不下载光谱波段；结果按 (scene_id, bbox) 进程内缓存。
     """
-    key = _cloud_cache_key(scene.scene_id, tuple(bbox))
+    key = _cloud_cache_key(
+        scene.scene_id, (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+    )
     if key in _CLOUD_CACHE:
         return _CLOUD_CACHE[key]
     val = _aoi_cloud_uncached(scene, bbox, spec=spec, auth=auth)
@@ -245,7 +247,9 @@ def rank_scenes(
         total=len(scenes),
         kept=len(ranked),
         best=ranked[0].scene.scene_id if ranked else None,
-        best_aoi_cloud=round(ranked[0].aoi_cloud, 2) if ranked and ranked[0].aoi_cloud is not None else None,
+        best_aoi_cloud=round(ranked[0].aoi_cloud, 2)
+        if ranked and ranked[0].aoi_cloud is not None
+        else None,
     )
     return ranked
 
@@ -258,11 +262,9 @@ def format_ranked(ranked: Sequence[RankedScene]) -> str:
     ]
     for r in ranked:
         tier = r.tier or "-"
-        ac = f"{r.aoi_cloud*100:.2f}" if r.aoi_cloud is not None else "n/a"
+        ac = f"{r.aoi_cloud * 100:.2f}" if r.aoi_cloud is not None else "n/a"
         sc = f"{r.scene.cloud_cover:.2f}" if r.scene.cloud_cover is not None else "-"
-        lines.append(
-            f"{r.scene.scene_id:38s} {tier:4s} {ac:>7s} {sc:>6s} {r.overlap*100:5.1f}%"
-        )
+        lines.append(f"{r.scene.scene_id:38s} {tier:4s} {ac:>7s} {sc:>6s} {r.overlap * 100:5.1f}%")
     return "\n".join(lines)
 
 

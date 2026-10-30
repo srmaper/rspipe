@@ -151,10 +151,11 @@ class RangeProxy:
             (_ProxyHandler,),
             {"allowed_hosts": set(), "shared_client": self._client},
         )
-        self._handler_cls = handler
+        self._handler_cls: Any = handler
         self._server = ThreadingHTTPServer((host, port), handler)
         self._server.daemon_threads = True
-        self.host, self.port = self._server.server_address[0], self._server.server_address[1]
+        self.host = str(self._server.server_address[0])
+        self.port = int(self._server.server_address[1])
         self._thread: threading.Thread | None = None
 
     # ── 生命周期 ──────────────────────────────────────────────────────────

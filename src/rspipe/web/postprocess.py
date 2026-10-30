@@ -105,7 +105,7 @@ def build_preview_4326(raw_dir: Path, collection: str) -> Path | None:
     )
     max_side = 4096
     if max(width, height) > max_side:
-        s = max(width, height) / max_side          # 单一比例，保持长宽比
+        s = max(width, height) / max_side  # 单一比例，保持长宽比
         width = max(1, round(width / s))
         height = max(1, round(height / s))
         transform = transform * transform.scale(s, s)

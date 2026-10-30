@@ -58,7 +58,9 @@ class MosaicConfig(BaseModel):
 
 
 class ScheduleConfig(BaseModel):
-    cron: dict[str, Any] = Field(default_factory=lambda: {"hour": 2, "minute": 0, "timezone": "UTC"})
+    cron: dict[str, Any] = Field(
+        default_factory=lambda: {"hour": 2, "minute": 0, "timezone": "UTC"}
+    )
     lookback_days: int = 3
     max_scenes_per_run: int = 50
     max_retries: int = 2
@@ -123,9 +125,7 @@ class PipelineConfig(BaseModel):
     def enabled_providers(self) -> list[ProviderConfig]:
         wanted = set(self.pipeline.providers)
         return [
-            p
-            for name, p in self.providers.items()
-            if p.enabled and (not wanted or name in wanted)
+            p for name, p in self.providers.items() if p.enabled and (not wanted or name in wanted)
         ]
 
 
@@ -218,13 +218,16 @@ def load_pipeline_config(
         # 让 pydantic-settings 读取该 .env
         os.environ.setdefault("DOTENV_PATH", str(env_file))
 
-    settings = Settings(_env_file=str(env_file) if env_file and Path(env_file).exists() else None)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=str(env_file) if env_file and Path(env_file).exists() else None
+    )
 
     sections: dict[str, Any] = {
         "pipeline": pipeline_raw.get("pipeline", {}),
         "schedule": pipeline_raw.get("schedule", {}),
         "storage": pipeline_raw.get("storage", {}),
-        "logging": pipeline_raw.get("logging", {}),        "normalize": sensors_raw.get("normalize", {}),
+        "logging": pipeline_raw.get("logging", {}),
+        "normalize": sensors_raw.get("normalize", {}),
         "cloud_mask": sensors_raw.get("cloud_mask", {}),
         "color_balance": sensors_raw.get("color_balance", {}),
         "mosaic": sensors_raw.get("mosaic", {}),

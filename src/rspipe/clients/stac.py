@@ -192,7 +192,9 @@ class StacClient:
     # ── Item -> SceneMeta ─────────────────────────────────────────────────
     def item_to_scene(self, item: pystac.Item) -> SceneMeta:
         props: dict[str, Any] = dict(item.properties or {})
-        collection = item.collection_id or self.cfg.collections[0] if self.cfg.collections else "unknown"
+        collection = (
+            item.collection_id or self.cfg.collections[0] if self.cfg.collections else "unknown"
+        )
         platform = props.get("platform") or props.get("instruments")
         if isinstance(platform, list):
             platform = platform[0] if platform else None
@@ -228,7 +230,7 @@ class StacClient:
             provider=self.name,
             collection=collection,
             datetime=dt,
-            bbox=bbox,  # type: ignore[arg-type]
+            bbox=bbox,
             geometry=item.geometry,
             cloud_cover=props.get("eo:cloud_cover"),
             platform=platform,
@@ -265,7 +267,7 @@ class StacClient:
         *,
         mode: FetchMode | None = None,
         bbox: tuple[float, float, float, float] | None = None,
-    ) -> Path:
+    ) -> str | Path:
         from rspipe.ingest.fetcher import fetch_asset
 
         return fetch_asset(

@@ -143,9 +143,7 @@ class RangeFile(io.RawIOBase):
             raise DownloadError(f"HEAD failed for {self.url}: {exc}") from exc
         # 退化：用 1 字节 Range 探测
         try:
-            resp = self._client.get(
-                self.url, headers={**self.headers, "Range": "bytes=0-0"}
-            )
+            resp = self._client.get(self.url, headers={**self.headers, "Range": "bytes=0-0"})
             cr = resp.headers.get("content-range", "")
             if "/" in cr:
                 return int(cr.rsplit("/", 1)[1])
@@ -227,8 +225,11 @@ class RangeFile(io.RawIOBase):
             except httpx.HTTPError as exc:
                 last_exc = exc
                 log.warning(
-                    "range.retry", url=self.url.rsplit("/", 1)[-1],
-                    block=index, attempt=attempt, error=type(exc).__name__,
+                    "range.retry",
+                    url=self.url.rsplit("/", 1)[-1],
+                    block=index,
+                    attempt=attempt,
+                    error=type(exc).__name__,
                 )
             if attempt < 5:
                 wait = min(10.0, 0.5 * (2 ** (attempt - 1)))

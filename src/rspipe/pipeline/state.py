@@ -127,9 +127,7 @@ class PipelineState:
             conn.executescript(_SCHEMA)
 
     # ── 水位线 ────────────────────────────────────────────────────────────
-    def get_watermark(
-        self, provider: str, collection: str, aoi_id: str
-    ) -> Watermark | None:
+    def get_watermark(self, provider: str, collection: str, aoi_id: str) -> Watermark | None:
         with self._conn() as conn:
             row = conn.execute(
                 "SELECT * FROM watermark WHERE provider=? AND collection=? AND aoi_id=?",
@@ -145,9 +143,7 @@ class PipelineState:
             updated_at=_parse(row["updated_at"]) if row["updated_at"] else None,
         )
 
-    def set_watermark(
-        self, provider: str, collection: str, aoi_id: str, last_dt: datetime
-    ) -> None:
+    def set_watermark(self, provider: str, collection: str, aoi_id: str, last_dt: datetime) -> None:
         with self._conn() as conn:
             conn.execute(
                 """

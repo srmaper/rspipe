@@ -73,14 +73,22 @@ def test_processed_failed_not_counted_as_done(tmp_path: Path):
 def test_processed_upsert_overwrites(tmp_path: Path):
     st = PipelineState(tmp_path / "s.sqlite")
     rec = ProcessedRecord(
-        scene_id="s1", provider="p", collection="c",
-        processed_at=datetime(2026, 5, 1, tzinfo=UTC), status="failed",
+        scene_id="s1",
+        provider="p",
+        collection="c",
+        processed_at=datetime(2026, 5, 1, tzinfo=UTC),
+        status="failed",
     )
     st.mark_processed(rec)
-    st.mark_processed(ProcessedRecord(
-        scene_id="s1", provider="p", collection="c",
-        processed_at=datetime(2026, 5, 2, tzinfo=UTC), status="ok",
-    ))
+    st.mark_processed(
+        ProcessedRecord(
+            scene_id="s1",
+            provider="p",
+            collection="c",
+            processed_at=datetime(2026, 5, 2, tzinfo=UTC),
+            status="ok",
+        )
+    )
     assert st.processed_count() == 1
     assert st.is_processed("p", "s1")
 
@@ -103,9 +111,14 @@ def test_run_lifecycle(tmp_path: Path):
 def test_recent_processed_ordering(tmp_path: Path):
     st = PipelineState(tmp_path / "s.sqlite")
     for i in range(5):
-        st.mark_processed(ProcessedRecord(
-            scene_id=f"s{i}", provider="p", collection="c",
-            processed_at=datetime(2026, 5, 1 + i, tzinfo=UTC), status="ok",
-        ))
+        st.mark_processed(
+            ProcessedRecord(
+                scene_id=f"s{i}",
+                provider="p",
+                collection="c",
+                processed_at=datetime(2026, 5, 1 + i, tzinfo=UTC),
+                status="ok",
+            )
+        )
     recent = st.recent_processed(limit=3)
     assert [r.scene_id for r in recent] == ["s4", "s3", "s2"]

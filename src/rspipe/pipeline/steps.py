@@ -163,9 +163,7 @@ class SceneProcessor:
         if name == "cloud_mask":
             return self._mask_path().exists()
         if name == "stac_publish":
-            return self.layout.stac_item_path(
-                self.ctx.collection_id, self.scene.scene_id
-            ).exists()
+            return self.layout.stac_item_path(self.ctx.collection_id, self.scene.scene_id).exists()
         return False
 
     # ── 产物路径 ──────────────────────────────────────────────────────────
@@ -186,11 +184,13 @@ class SceneProcessor:
         raw_dir = self.layout.ensure_scene(self.scene.provider, self.scene.scene_id)
         if not self.scene.raw_href:
             raise NormalizeError(f"scene {self.scene.scene_id}: no raw archive href")
-        src = Path(fetch_asset(
-            AssetRef(key="product", href=self.scene.raw_href, fetch_mode=FetchMode.DOWNLOAD),
-            raw_dir / Path(self.scene.raw_href).name,
-            auth=self.ctx.auth,
-        ))
+        src = Path(
+            fetch_asset(
+                AssetRef(key="product", href=self.scene.raw_href, fetch_mode=FetchMode.DOWNLOAD),
+                raw_dir / Path(self.scene.raw_href).name,
+                auth=self.ctx.auth,
+            )
+        )
         root = unpack_archive(src, self.ctx.staging_dir)
         meta = find_metadata(root)
         if meta is not None:

@@ -36,8 +36,6 @@ def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:
     return (minx, miny, maxx, maxy)
 
 
-
-
 def plan_tile_window(bounds, crs, transform, width, height, b3857, level_scale=1.0):
     """瓦片 bbox(3857) 与栅格范围求交 → (dst 子矩形, src 像素窗口) 或 None。
 
@@ -142,8 +140,12 @@ def render_tile(
         out_w = max(1, int(win.width * scale))
 
         if channels == "ndvi":
-            r = src.read(1, window=win, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
-            n = src.read(4, window=win, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+            r = src.read(
+                1, window=win, out_shape=(out_h, out_w), resampling=Resampling.bilinear
+            ).astype("float32")
+            n = src.read(
+                4, window=win, out_shape=(out_h, out_w), resampling=Resampling.bilinear
+            ).astype("float32")
             with np.errstate(invalid="ignore"):
                 nd = (n - r) / (n + r)
             valid = np.isfinite(nd) & (r + n > 0)
@@ -152,7 +154,9 @@ def render_tile(
         else:
             # rgb: 1,2,3；false(假彩): nir,red,green → 4,1,2
             idx = [1, 2, 3] if channels == "rgb" else [4, 1, 2]
-            stack = src.read(idx, window=win, out_shape=(3, out_h, out_w), resampling=Resampling.bilinear)
+            stack = src.read(
+                idx, window=win, out_shape=(3, out_h, out_w), resampling=Resampling.bilinear
+            )
             stack = stack.astype("float32")
             if stack_views_are_dn(stack):  # 兜底：万一传入的是 DN 而非反射率
                 stack = stack / 10000.0
@@ -209,7 +213,7 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
             integer_store = src.dtypes[0] in ("uint16", "int16")
             for bi in range(1, min(4, src.count) + 1):
                 arr = src.read(bi, out_shape=(128, 128)).astype("float32")
-                if integer_store:                 # 预览栅格按 rho*10000 存储
+                if integer_store:  # 预览栅格按 rho*10000 存储
                     arr = arr / 10000.0
                     arr[arr <= 0] = np.nan
                 v = arr[np.isfinite(arr)]
@@ -224,7 +228,9 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
     return out
 
 
-def render_cog_tile_subrect(cog_path: Path, z: int, x: int, y: int, channels: str = "rgb") -> bytes | None:
+def render_cog_tile_subrect(
+    cog_path: Path, z: int, x: int, y: int, channels: str = "rgb"
+) -> bytes | None:
     """COG 瓦片：按交集子矩形拼到 256 画布，无值区透明；有效像元<1% 返回 None。"""
     import io
 
@@ -278,7 +284,9 @@ def render_cog_tile_subrect(cog_path: Path, z: int, x: int, y: int, channels: st
     return buf.getvalue()
 
 
-def render_raster_tile(raster_path: Path, z: int, x: int, y: int, channels: str = "rgb") -> bytes | None:
+def render_raster_tile(
+    raster_path: Path, z: int, x: int, y: int, channels: str = "rgb"
+) -> bytes | None:
     """多波段栅格（1=red,2=green,3=blue,4=nir，反射率）→ 瓦片 PNG。
 
     与 COG/raw 路径共用几何与按景拉伸，只是数据源换成单文件（通常是 4326 预览栅格）。
@@ -295,7 +303,9 @@ def render_raster_tile(raster_path: Path, z: int, x: int, y: int, channels: str 
     with rasterio.open(raster_path) as src:
         if src.count < 3:
             return None
-        plan = plan_tile_window(src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y))
+        plan = plan_tile_window(
+            src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y)
+        )
         if plan is None:
             return None
         (dx0, dy0, dx1, dy1), (col, row, w, h) = plan
@@ -304,10 +314,14 @@ def render_raster_tile(raster_path: Path, z: int, x: int, y: int, channels: str 
         for bi in idx:
             if bi > src.count:
                 return None
-            a = src.read(bi, window=Window(col, row, w, h), out_shape=(dy1 - dy0, dx1 - dx0),
-                         resampling=Resampling.bilinear).astype("float32")
+            a = src.read(
+                bi,
+                window=Window(col, row, w, h),
+                out_shape=(dy1 - dy0, dx1 - dx0),
+                resampling=Resampling.bilinear,
+            ).astype("float32")
             if integer_store:
-                a = a / 10000.0          # 预览栅格按 ρ×10000 存储
+                a = a / 10000.0  # 预览栅格按 ρ×10000 存储
                 a[a <= 0] = np.nan
             chans.append(a)
 

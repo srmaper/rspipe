@@ -36,8 +36,7 @@ log = get_logger("rspipe.clients.cdse_odata")
 DEFAULT_ODATA = "https://catalogue.dataspace.copernicus.eu/odata/v1"
 DEFAULT_S3 = "https://eodata.dataspace.copernicus.eu"
 DEFAULT_TOKEN_URL = (
-    "https://identity.dataspace.copernicus.eu/auth/realms/CDSE"
-    "/protocol/openid-connect/token"
+    "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 )
 
 # CDSE OData 产品类型 -> 内部画像
@@ -58,8 +57,7 @@ class CdseODataClient:
         self.settings = settings
         if not settings.cdse_client_id or not settings.cdse_client_secret:
             raise CredentialError(
-                "CDSE OData requires CDSE_CLIENT_ID and CDSE_CLIENT_SECRET "
-                "(see .env.example)"
+                "CDSE OData requires CDSE_CLIENT_ID and CDSE_CLIENT_SECRET (see .env.example)"
             )
         self.base_url = (cfg.base_url or DEFAULT_ODATA).rstrip("/")
         self.s3_endpoint = (cfg.s3_endpoint or DEFAULT_S3).rstrip("/")
@@ -82,7 +80,10 @@ class CdseODataClient:
         end: datetime | None = None,
         max_cloud_cover: float | None = None,
         max_items: int | None = None,
+        ids: list[str] | None = None,
     ) -> list[SceneMeta]:
+        if ids:
+            raise SearchError("cdse_odata: search by ids is not supported")
         if bbox is None and geometry is None:
             raise SearchError("cdse_odata: bbox or geometry required")
 
@@ -92,7 +93,9 @@ class CdseODataClient:
         if end is not None:
             filters.append(f"ContentDate/Start le {end.isoformat()}Z")
         if max_cloud_cover is not None:
-            filters.append(f"Attributes/OData.CSC.DoubleAttribute/any(a: a/Name eq 'cloudCover' and a/Value le {max_cloud_cover})")
+            filters.append(
+                f"Attributes/OData.CSC.DoubleAttribute/any(a: a/Name eq 'cloudCover' and a/Value le {max_cloud_cover})"
+            )
 
         # 产品类型过滤（来自 cfg.collections 里的 OData ProductType）
         product_types = [c for c in self.cfg.collections if c.upper().startswith("S2")]
@@ -109,9 +112,7 @@ class CdseODataClient:
         elif geometry is not None and geometry.get("type") == "Polygon":
             coords = geometry["coordinates"][0]
             pts = ",".join(f"{c[0]} {c[1]}" for c in coords)
-            filters.append(
-                f"OData.CSC.Intersects(area=geography'SRID=4326;POLYGON(({pts}))')"
-            )
+            filters.append(f"OData.CSC.Intersects(area=geography'SRID=4326;POLYGON(({pts}))')")
 
         params: dict[str, Any] = {
             "$filter": " and ".join(filters) if filters else None,
@@ -202,7 +203,7 @@ class CdseODataClient:
         *,
         mode: FetchMode | None = None,
         bbox: tuple[float, float, float, float] | None = None,
-    ) -> Path:
+    ) -> str | Path:
         if mode is FetchMode.VSI:
             return fetch_asset(asset, dest, auth=self._auth, mode=mode, bbox=bbox)
         if not asset.href:

@@ -115,16 +115,12 @@ def mosaic(
     shape0 = sources[0].data.shape
     for s in sources:
         if s.data.shape != shape0:
-            raise MosaicError(
-                f"mosaic: {s.scene_id} shape {s.data.shape} != {shape0}"
-            )
+            raise MosaicError(f"mosaic: {s.scene_id} shape {s.data.shape} != {shape0}")
         if s.mask.shape != shape0[1:]:
             raise MosaicError(f"mosaic: {s.scene_id} mask shape mismatch")
 
     bands, height, width = shape0
-    weights = build_weights(
-        sources, feather=feather, blend_distance=blend_distance, power=power
-    )
+    weights = build_weights(sources, feather=feather, blend_distance=blend_distance, power=power)
 
     if feather == "first":
         return _mosaic_first(sources, bands, height, width, dtype, fill)

@@ -9,11 +9,20 @@ import numpy as np
 from PIL import Image
 
 BAND_CN = {
-    "coastal": "海岸气溶胶", "blue": "蓝", "green": "绿", "red": "红",
-    "rededge1": "红边1", "rededge2": "红边2", "rededge3": "红边3",
-    "nir": "近红外", "nir08": "窄近红外", "nir09": "水汽",
-    "swir16": "短波红外1", "swir22": "短波红外2",
-    "scl": "场景分类", "qa_pixel": "像元质量标志",
+    "coastal": "海岸气溶胶",
+    "blue": "蓝",
+    "green": "绿",
+    "red": "红",
+    "rededge1": "红边1",
+    "rededge2": "红边2",
+    "rededge3": "红边3",
+    "nir": "近红外",
+    "nir08": "窄近红外",
+    "nir09": "水汽",
+    "swir16": "短波红外1",
+    "swir22": "短波红外2",
+    "scl": "场景分类",
+    "qa_pixel": "像元质量标志",
 }
 
 
@@ -55,7 +64,9 @@ def make_quicklook(raw_dir: Path, collection: str, max_px: int = 1024) -> bytes 
     return buf.getvalue()
 
 
-def make_readme(scene_id: str, provider: str, collection: str, raw_dir: Path | None, has_cog: bool) -> bytes:
+def make_readme(
+    scene_id: str, provider: str, collection: str, raw_dir: Path | None, has_cog: bool
+) -> bytes:
     lines = [
         f"场景: {scene_id}",
         f"数据源: {provider} / {collection}",
@@ -86,19 +97,14 @@ def make_readme(scene_id: str, provider: str, collection: str, raw_dir: Path | N
         "    预览栅格：合并 R/G/B/NIR 并重投影到 EPSG:4326（uint16，值=反射率×10000，0=无数据），\n"
         "    平台预览即用此文件，体积小、无投影误差，可直接叠加到 Web 地图"
     )
+    lines.append("aoi.geojson\n    本次下载使用的 AOI 范围（WGS84 面），便于复现裁剪范围")
     lines.append(
-        "aoi.geojson\n"
-        "    本次下载使用的 AOI 范围（WGS84 面），便于复现裁剪范围"
+        "quicklook.png\n    快视预览图：红/绿/蓝 2% 线性拉伸合成，仅供目视参考，非定量产品"
     )
-    lines.append(
-        "quicklook.png\n"
-        "    快视预览图：红/绿/蓝 2% 线性拉伸合成，仅供目视参考，非定量产品"
+    lines.append("README.txt\n    本说明文件：目录结构、波段清单、定标公式")
+    items = (
+        sorted(raw_dir.parent.parent.parent.glob(f"catalog/*/{scene_id}.json")) if raw_dir else []
     )
-    lines.append(
-        "README.txt\n"
-        "    本说明文件：目录结构、波段清单、定标公式"
-    )
-    items = sorted(raw_dir.parent.parent.parent.glob(f"catalog/*/{scene_id}.json")) if raw_dir else []
     if items:
         lines.append(
             f"{items[0].parent.name}/{items[0].name}\n"
@@ -161,10 +167,10 @@ def make_composite(raw_dir: Path, collection: str, dest: Path) -> Path | None:
     try:
         for i, k in enumerate(bands, start=1):
             with rasterio.open(picks[k]) as src:
-                same = (
-                    (src.width, src.height) == (profile["width"], profile["height"])
-                    and src.transform == profile["transform"]
-                )
+                same = (src.width, src.height) == (
+                    profile["width"],
+                    profile["height"],
+                ) and src.transform == profile["transform"]
                 if same:
                     arr = src.read(1).astype("float32")
                 else:

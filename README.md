@@ -80,7 +80,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `一键部署环境.bat` | 安装 Python 依赖（`pip install -e .[dev]`）+ 前端 `npm install` & `npm run build` |
+| `一键部署环境.bat` | 自动查找 Python 3.11+（找不到可一键 winget 安装）→ 装依赖 → 构建前端 |
 | `一键启动服务.bat` | 杀旧实例 → 启动服务（崩溃自动拉起）→ 自动打开 http://127.0.0.1:8000 |
 
 双击即可，无需命令行基础。
@@ -233,6 +233,8 @@ data/
 
 ```bash
 ruff check src tests scripts
+ruff format --check src tests scripts
+mypy                       # src/rspipe，0 error
 pytest tests -q            # 90 项，无需网络
 ```
 

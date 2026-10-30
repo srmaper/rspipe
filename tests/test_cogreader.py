@@ -160,6 +160,6 @@ def test_undo_predictor2_roundtrip():
 
     # 构造：真值 -> 差分
     true = np.arange(16, dtype="uint16").reshape(4, 4)
-    diff = np.diff(true, axis=1, prepend=np.zeros((4, 1), dtype='uint16'))
+    diff = np.diff(true, axis=1, prepend=np.zeros((4, 1), dtype="uint16"))
     restored = _undo_predictor2(diff)
     assert np.array_equal(restored, true)

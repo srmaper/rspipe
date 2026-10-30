@@ -87,12 +87,8 @@ def decode_qa_pixel(
             invalid |= hit
 
     mask = ~invalid
-    fracs["cloud_fraction"] = float(
-        ((qa & (1 << bits.get("cloud", 3))) != 0).mean()
-    )
-    fracs["shadow_fraction"] = float(
-        ((qa & (1 << bits.get("cloud_shadow", 4))) != 0).mean()
-    )
+    fracs["cloud_fraction"] = float(((qa & (1 << bits.get("cloud", 3))) != 0).mean())
+    fracs["shadow_fraction"] = float(((qa & (1 << bits.get("cloud_shadow", 4))) != 0).mean())
     fracs["snow_fraction"] = float(((qa & (1 << bits.get("snow", 5))) != 0).mean())
     fracs["water_fraction"] = float(((qa & (1 << bits.get("water", 6))) != 0).mean())
     fracs["invalid_fraction"] = float(invalid.mean())
@@ -102,18 +98,18 @@ def decode_qa_pixel(
 # ── Sentinel-2 SCL ───────────────────────────────────────────────────────────
 # SCL 默认保留类别：2 dark, 4 vegetation, 5 not-vegetated, 6 water, 11 snow/ice
 SCL_DEFAULT_KEEP: dict[int, bool] = {
-    0: False,   # no data
-    1: False,   # saturated or defective
-    2: True,    # dark area
-    3: False,   # cloud shadow
-    4: True,    # vegetation
-    5: True,    # not vegetated
-    6: True,    # water
-    7: False,   # unclassified
-    8: False,   # cloud medium
-    9: False,   # cloud high
+    0: False,  # no data
+    1: False,  # saturated or defective
+    2: True,  # dark area
+    3: False,  # cloud shadow
+    4: True,  # vegetation
+    5: True,  # not vegetated
+    6: True,  # water
+    7: False,  # unclassified
+    8: False,  # cloud medium
+    9: False,  # cloud high
     10: False,  # thin cirrus
-    11: True,   # snow / ice
+    11: True,  # snow / ice
 }
 
 _SCL_CLOUD = (8, 9, 10)

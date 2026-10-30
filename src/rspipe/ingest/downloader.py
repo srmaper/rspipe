@@ -96,9 +96,7 @@ def download_file(
 
     if expected_size is not None and total != expected_size:
         tmp.unlink(missing_ok=True)
-        raise DownloadError(
-            f"size mismatch for {url}: got {total}, expected {expected_size}"
-        )
+        raise DownloadError(f"size mismatch for {url}: got {total}, expected {expected_size}")
 
     tmp.replace(dest)
     log.info("download.done", dest=str(dest), bytes=total)

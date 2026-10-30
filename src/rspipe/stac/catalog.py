@@ -29,11 +29,7 @@ def make_collection(
 ) -> pystac.Collection:
     """创建 STAC Collection。"""
     bbox = list(extent_bbox) if extent_bbox else [-180.0, -90.0, 180.0, 90.0]
-    interval = (
-        list(extent_interval)
-        if extent_interval
-        else [[None, None]]
-    )
+    interval = list(extent_interval) if extent_interval else [[None, None]]
     spatial = pystac.SpatialExtent(bboxes=[bbox])
     temporal = pystac.TemporalExtent(intervals=[[_parse(s) for s in interval[0]]])
     extent = pystac.Extent(spatial=spatial, temporal=temporal)
@@ -153,9 +149,7 @@ class CatalogPublisher:
                 except Exception:
                     continue
                 catalog.add_child(col)
-        catalog.save_object(
-            include_self_link=True, dest_href=str(self.root_catalog_path)
-        )
+        catalog.save_object(include_self_link=True, dest_href=str(self.root_catalog_path))
 
     def load_item(self, collection_id: str, item_id: str) -> pystac.Item:
         path = self.item_path(collection_id, item_id)
@@ -174,9 +168,7 @@ class CatalogPublisher:
                 log.warning("stac.item.load-failed", path=str(path))
 
     def collections(self) -> list[str]:
-        return sorted(
-            p.stem for p in self.root_dir.glob("*/") if (p / f"{p.name}.json").exists()
-        )
+        return sorted(p.stem for p in self.root_dir.glob("*/") if (p / f"{p.name}.json").exists())
 
 
 __all__ = ["CatalogPublisher", "make_catalog", "make_collection"]

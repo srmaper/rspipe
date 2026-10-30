@@ -15,7 +15,19 @@ def local_raw(layout, provider: str, scene_id: str, key: str) -> Path | None:
     return p if p.exists() else None
 
 
-def download_scene_raw(pipe, layout, scene_id: str, provider: str, collection: str, bbox, *, keys=None, progress=None, block_size=1 << 23, workers=6) -> Path:
+def download_scene_raw(
+    pipe,
+    layout,
+    scene_id: str,
+    provider: str,
+    collection: str,
+    bbox,
+    *,
+    keys=None,
+    progress=None,
+    block_size=1 << 23,
+    workers=6,
+) -> Path:
     """raw AOI 裁剪下载（8MB 块 × 6 线程，已存在文件跳过）。
 
     `keys`：波段白名单（默认全谱 + SCL/qa_pixel）。
@@ -30,7 +42,21 @@ def download_scene_raw(pipe, layout, scene_id: str, provider: str, collection: s
     scene = scenes[0]
     scene.provider = provider
     keys = keys or (
-        ["coastal", "blue", "green", "red", "rededge1", "rededge2", "rededge3", "nir", "nir08", "nir09", "swir16", "swir22", "scl"]
+        [
+            "coastal",
+            "blue",
+            "green",
+            "red",
+            "rededge1",
+            "rededge2",
+            "rededge3",
+            "nir",
+            "nir08",
+            "nir09",
+            "swir16",
+            "swir22",
+            "scl",
+        ]
         if "sentinel" in collection
         else ["coastal", "blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel"]
     )
@@ -50,7 +76,7 @@ def download_scene_raw(pipe, layout, scene_id: str, provider: str, collection: s
         with CogReader(href, block_size=block_size) as r:
             col, row, w, h = r.window_for_bbox(tuple(bbox))
             if w <= 0 or h <= 0:
-                raise RuntimeError('AOI 与该景范围无交集，请重新圈选')
+                raise RuntimeError("AOI 与该景范围无交集，请重新圈选")
             data = r.read_window(col, row, w, h)
             a, b, c, d, e, f = r.info.transform or (1, 0, 0, 0, -1, 0)
             transform = Affine(a, b, c, d, e, f) * Affine.translation(col, row)
@@ -93,5 +119,5 @@ def download_scene_raw(pipe, layout, scene_id: str, provider: str, collection: s
         log.warning("postprocess failed %s: %s", scene_id, exc)
         preview = None
     if progress:
-        progress(1.0, f"raw 完成 {time.time()-t0:.0f}s" + ("（含 4326 预览）" if preview else ""))
+        progress(1.0, f"raw 完成 {time.time() - t0:.0f}s" + ("（含 4326 预览）" if preview else ""))
     return out_dir

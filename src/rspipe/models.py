@@ -108,7 +108,7 @@ class SceneMeta:
     cloud_cover: float | None = None
     platform: str | None = None
     sensor_key: str | None = None  # 对应 configs/sensors.yaml 的 key
-    tier: str | None = None        # Landsat 数据级别（T1/T2）；非 Landsat 为 None
+    tier: str | None = None  # Landsat 数据级别（T1/T2）；非 Landsat 为 None
     product_level: ProductLevel = ProductLevel.L2
     radiometry: Radiometry = Radiometry.SURFACE_REFLECTANCE
     source_format: SourceFormat = SourceFormat.COG
@@ -190,8 +190,8 @@ class SceneResult:
     status: Literal["ok", "partial", "failed"] = "ok"
     error: str | None = None
     # AOI 质量指标（由 _step_cloud_mask 采集）
-    aoi_cloud_cover: float | None = None   # AOI 窗口内云+云影占比 0..1
-    valid_fraction: float | None = None    # 去云后有效像元占比 0..1
+    aoi_cloud_cover: float | None = None  # AOI 窗口内云+云影占比 0..1
+    valid_fraction: float | None = None  # 去云后有效像元占比 0..1
 
     @property
     def failed_steps(self) -> list[str]:
