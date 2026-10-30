@@ -10,13 +10,10 @@
     <div id="top">
       <!-- 左栏 -->
       <div id="left">
-        <div class="card guide-entry" @click="guideOpen = true">
-          <h3>使用指南</h3>
-          <div class="ge-desc">各分析工具所需的栅格、参数与结果说明</div>
-          <button class="primary ge-btn">查看指南</button>
-        </div>
+        <button class="primary guide-btn" id="tour-guide" @click="tourOpen = true">操作指引</button>
+        <button class="primary guide-btn" id="tour-guide-modal" @click="guideOpen = true">分析指南</button>
 
-        <div class="card">
+        <div class="card" id="tour-setup">
           <h3>分析设置</h3>
 
           <label>模式</label>
@@ -53,12 +50,12 @@
           <input type="range" min="-0.8" max="0.8" step="0.05" v-model.number="threshold" />
 
           <div class="row">
-            <button class="primary" :disabled="!canRun || running" @click="run">
+            <button class="primary" id="tour-run" :disabled="!canRun || running" @click="run">
               {{ running ? '计算中…' : '开始计算' }}
             </button>
           </div>
           <div class="row" v-if="mode === 'change'">
-            <button :disabled="!canRun || comparing" @click="openSwipe">
+            <button id="tour-swipe" :disabled="!canRun || comparing" @click="openSwipe">
               {{ comparing ? '准备中…' : '双屏对比' }}
             </button>
           </div>
@@ -71,7 +68,7 @@
           <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
           <div class="hint">{{ legendNote }}</div>
         </div>
-        <div class="card logbox">
+        <div class="card logbox" id="tour-log">
           <h3>日志</h3>
           <div class="log" ref="logEl">{{ logs.join('\n') }}</div>
         </div>
@@ -79,7 +76,7 @@
       </div>
 
       <!-- 中央地图 -->
-      <div id="center">
+      <div id="center" data-tour="map">
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
           <button :class="{ primary: resultVisible }" @click="toggleResult">结果</button>
@@ -90,7 +87,7 @@
 
       <!-- 右栏 -->
       <div id="right">
-        <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div class="card" id="tour-result" style="flex:1;min-height:0;display:flex;flex-direction:column">
           <h3>分析结果</h3>
           <div class="reslist">
             <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
@@ -103,6 +100,7 @@
     </div>
 
     <GuideModal v-if="guideOpen" @close="guideOpen = false" />
+    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" @close="tourOpen = false" />
     <SwipeCompare
       v-if="swipe"
       :tile-a="swipe.tileA"
@@ -121,6 +119,7 @@ import { computed, onMounted, ref } from 'vue'
 import MapCanvas from './MapCanvas.vue'
 import GuideModal from './GuideModal.vue'
 import SwipeCompare from './SwipeCompare.vue'
+import TourGuide from './TourGuide.vue'
 
 defineEmits(['home'])
 
@@ -134,6 +133,41 @@ const INDICES = [
 ]
 
 const guideOpen = ref(false)
+const tourOpen = ref(false)
+
+const TOUR_STEPS = [
+  {
+    selector: '#tour-setup',
+    title: '选择影像与指数',
+    text: '先选模式（单景指数 / 两期变化），再选已下载影像与指数。只列出波段齐全的指数；缺波段会提示。阈值用于分类统计或变化判定。',
+  },
+  {
+    selector: '#tour-run',
+    title: '开始计算',
+    text: '点击后计算指数并生成伪彩栅格，右侧显示统计（均值/中位数/有效面积/超阈值面积等），地图自动叠加结果。',
+  },
+  {
+    selector: '#tour-swipe',
+    fallback: '#tour-setup',
+    title: '双屏对比（两期）',
+    text: '两期变化模式下可用：分别计算两期后弹出全屏对比，中间黄色分割条可左右拖动查看变化。',
+  },
+  {
+    selector: '#center',
+    title: '地图与图例',
+    text: '左上「结果 / 范围」控制图层显示，右下切换底图，底部显示经纬度与比例尺；左栏图例说明伪彩含义。',
+  },
+  {
+    selector: '#tour-result',
+    title: '分析结果',
+    text: '这里显示统计结果表：均值、中位数、P10/P90、有效面积与占比、超阈值面积等；结果栅格保存在 data/analysis。',
+  },
+  {
+    selector: '#tour-log',
+    title: '日志',
+    text: '记录每次计算的时间、指数、完成情况与失败原因，便于回溯。',
+  },
+]
 const resultVisible = ref(true)
 const comparing = ref(false)
 const logs = ref([])
@@ -357,10 +391,7 @@ onMounted(loadScenes)
   font: 11px/1.55 Consolas, "Microsoft YaHei UI", monospace;
   padding: 8px 10px; border-radius: 10px; white-space: pre-wrap;
 }
-.guide-entry { cursor: pointer; }
-.guide-entry:hover { border-color: var(--accent); }
-.ge-desc { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
-.ge-btn { width: 100%; }
+.guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
 .seg { display: flex; gap: 6px; margin-top: 2px; }
 .seg button { flex: 1; }
 .row { margin-top: 10px; }

@@ -3,7 +3,7 @@
     <div class="mask" @click.self="$emit('close')">
       <div class="dlg">
         <div class="hd">
-          <h3>使用指南 · 分析工具说明</h3>
+          <h3>分析指南 · 分析工具说明</h3>
           <button class="x" @click="$emit('close')">✕</button>
         </div>
 
