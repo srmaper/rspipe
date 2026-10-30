@@ -1,5 +1,14 @@
 # 遥感影像 Web 平台设计（检索 + 下载 + 预览）
 
+> **实现状态（2026-10-30 更新）**：本文为最初设计稿，实际实现与设计有以下差异——
+>
+> - 前端未使用 Element Plus，采用自研浅色样式（`web/src/style.css`）
+> - 页面为 hash 路由三页：`#/` 首页、`#/download` 下载、`#/analysis` 分析
+> - 预览不走 TiTiler，自研瓦片端点（COG → 4326 预览栅格 → raw → 204）
+> - 新增：下载后处理（4326 预览栅格 + AOI 记录）、指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比
+> - 任务中心 sqlite 持久化，重启可续；服务脚本崩溃自动拉起
+
+
 > 前端 Vue 3 + MapLibre GL JS · 后端 FastAPI 复用 rspipe · 数据源 STAC 优先、地理空间数据云做适配器  
 > 版本 v0.1 设计稿 · 2026-10-27
 
