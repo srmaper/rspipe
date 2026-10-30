@@ -389,6 +389,10 @@ defineExpose({
   background-repeat: no-repeat;
   background-size: calc(100% - 28px) 2px, 2px 9px, 2px 9px;
   background-position: left 14px bottom 7px, left 14px bottom 7px, right 14px bottom 7px;
+  /* 整体缩小到 75%（文字/线段/卡片同步缩放） */
+  transform: scale(.75);
+  transform-origin: left bottom;
+  margin: 0 0 -2px -1px;
 }
 :deep(.maplibregl-ctrl-bottom-left) { margin-bottom: 6px; }
 </style>
