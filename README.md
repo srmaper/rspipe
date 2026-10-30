@@ -229,6 +229,18 @@ data/
 
 ---
 
+## 性能与缓存
+
+| 项 | 做法 | 效果 |
+|---|---|---|
+| 检索缓存 | STAC 结果落 `data/index/search_cache.sqlite`，TTL 24 h | 同一 AOI 二次检索 **47.5 s → 0.1 s** |
+| 云量缓存 | AOI 实测云量持久化，重启不丢 | 重复检索零网络；只实测预筛后的前 20 景 |
+| 签名缓存 | SAS token 带过期时间复用，并发上限 4，429 按 `Retry-After` 退避 | 消除 Planetary Computer 限流风暴 |
+| 下载并发 | 顺序读时预取 8 块，全局并发上限 32 | 单连接被限速 17 KB/s → 实测 100 KB/s+ |
+
+可用环境变量微调：`RSPIPE_CACHE_TTL`（秒）、`RSPIPE_MAX_CONNECTIONS`、
+`RSPIPE_PREFETCH_BLOCKS`、`RSPIPE_SIGN_CONCURRENCY`。
+
 ## 验证
 
 ```bash

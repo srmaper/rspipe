@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from collections.abc import Sequence
@@ -20,6 +21,7 @@ import shapely
 from shapely.geometry import box as shapely_box
 
 from rspipe.bands import BandResolver
+from rspipe.cache import get_cache
 from rspipe.ingest.cogreader import CogReader
 from rspipe.ingest.signing import needs_signing, sign_href
 from rspipe.logging import get_logger
@@ -77,9 +79,21 @@ def aoi_cloud_fraction(
     )
     if key in _CLOUD_CACHE:
         return _CLOUD_CACHE[key]
+
+    disk_key = "cloud:" + json.dumps([scene.scene_id, [round(float(v), 4) for v in bbox]])
+    cache = get_cache()
+    hit = cache.get(disk_key)
+    if isinstance(hit, dict) and "v" in hit:
+        val = hit["v"]
+        _CLOUD_CACHE[key] = val
+        return val
+
     val = _aoi_cloud_uncached(scene, bbox, spec=spec, auth=auth)
     _CLOUD_CACHE[key] = val
-    if len(_CLOUD_CACHE) > _CLOUD_CACHE_MAX:  # 粗略 LRU：无处可查时丢最早 64 条
+    if val is not None:
+        with contextlib.suppress(Exception):
+            cache.put(disk_key, {"v": val})
+    if len(_CLOUD_CACHE) > _CLOUD_CACHE_MAX:  # 粗略 LRU：无处可查时丢最早 64 个
         for old in list(_CLOUD_CACHE)[:64]:
             _CLOUD_CACHE.pop(old, None)
     return val
@@ -197,12 +211,14 @@ def rank_scenes(
     auth: Any = None,
     prefer_tier1: bool = True,
     min_overlap: float = 0.0,
-    max_workers: int = 6,
+    max_workers: int = 10,
+    max_measure: int = 20,
 ) -> list[RankedScene]:
     """按选景质量排序：Tier1 优先 > AOI 实测云量升序 > 重叠度降序。
 
     `min_overlap` 过滤掉与 AOI 重叠过小的景（如 0.3 = 至少 30%）。
-    AOI 云量实测是网络拉 QA 瓦片的主代价，`max_workers` 并行共享之。
+    AOI 云量实测是网络拉 QA 瓦片的主代价，`max_workers` 并行共享之；
+    `max_measure` 限制实测景数（按 Tier/整景云量/重叠预筛），避免 50 景全量读 QA。
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -220,12 +236,24 @@ def rank_scenes(
     def measure(s: SceneMeta) -> float | None:
         return aoi_cloud_fraction(s, bbox, spec=spec, auth=auth)
 
-    clouds: list[float | None]
-    if len(cand) == 1:
-        clouds = [measure(cand[0][0])]
+    def prefilter_key(i: int) -> tuple:
+        scene, ov, tier = cand[i]
+        tier_pen = 0 if (tier in (None, "T1") or not prefer_tier1) else 1
+        cloud = scene.cloud_cover if scene.cloud_cover is not None else 100.0
+        return (tier_pen, cloud, -ov)
+
+    order = sorted(range(len(cand)), key=prefilter_key)
+    targets = order[: max(1, min(max_measure, len(cand)))]
+
+    clouds: list[float | None] = [None] * len(cand)
+    if len(targets) == 1:
+        clouds[targets[0]] = measure(cand[targets[0]][0])
     else:
         with ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="rsq") as ex:
-            clouds = list(ex.map(measure, [c[0] for c in cand]))
+            for i, val in zip(
+                targets, ex.map(lambda i: measure(cand[i][0]), targets), strict=False
+            ):
+                clouds[i] = val
 
     ranked: list[RankedScene] = []
     for (s, ov, tier), ac in zip(cand, clouds, strict=False):

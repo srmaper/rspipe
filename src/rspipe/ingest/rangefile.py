@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import threading
 from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,14 @@ log = get_logger("rspipe.ingest.rangefile")
 DEFAULT_BLOCK = 1 << 18  # 256 KiB
 DEFAULT_CACHE_BLOCKS = 512  # 128 MiB 上限
 _TIMEOUT = 120.0
+
+# 单连接经常被限速（实测 14 KB/s），并发才是吞吐来源。
+# 全局连接上限防止多波段并发把对端打挂。
+MAX_CONNECTIONS = max(4, int(os.environ.get("RSPIPE_MAX_CONNECTIONS", "32")))
+DEFAULT_PREFETCH = int(os.environ.get("RSPIPE_PREFETCH_BLOCKS", "8"))
+
+_CONN_SEM = threading.BoundedSemaphore(MAX_CONNECTIONS)
+_POOL = ThreadPoolExecutor(max_workers=MAX_CONNECTIONS, thread_name_prefix="rsrange")
 
 # Range 字节流进度钩子（web 任务条用）：fn(nbytes)
 progress_hook = None
@@ -51,21 +61,26 @@ class RangeFile(io.RawIOBase):
         block_size: int = DEFAULT_BLOCK,
         max_cached_blocks: int = DEFAULT_CACHE_BLOCKS,
         client: httpx.Client | None = None,
+        prefetch: int = DEFAULT_PREFETCH,
     ) -> None:
         self.url = url
         self._is_remote = url.startswith(("http://", "https://"))
         self.headers = dict(headers or {})
         self.block_size = int(block_size)
         self.max_cached_blocks = int(max_cached_blocks)
+        self.prefetch = int(prefetch)
         self._client = client or httpx.Client(
             timeout=httpx.Timeout(connect=15.0, read=30.0, write=30.0, pool=30.0),
             follow_redirects=True,
-            limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
+            limits=httpx.Limits(
+                max_connections=MAX_CONNECTIONS, max_keepalive_connections=MAX_CONNECTIONS
+            ),
         )
         self._owns_client = client is None
         self._pos = 0
         self._size: int | None = None
         self._cache: OrderedDict[int, bytes] = OrderedDict()
+        self._inflight: dict[int, Future] = {}
         self._lock = threading.Lock()
         self._blocks_read = 0
         self._bytes_read = 0
@@ -85,6 +100,8 @@ class RangeFile(io.RawIOBase):
         return self._owns_client and self._client.is_closed
 
     def close(self) -> None:
+        with self._lock:
+            self._inflight.clear()
         if self._owns_client:
             self._client.close()
         self._cache.clear()
@@ -173,16 +190,51 @@ class RangeFile(io.RawIOBase):
             if cached is not None:
                 self._cache.move_to_end(index)
                 return cached
+            pending = self._inflight.get(index)
 
-        data = self._fetch_block(index)
+        if pending is not None:
+            data = pending.result()
+        else:
+            data = self._fetch_block(index)
+            self._store_block(index, data)
 
+        self._prefetch_after(index)
+        return data
+
+    def _store_block(self, index: int, data: bytes) -> None:
         with self._lock:
             self._cache[index] = data
             self._cache.move_to_end(index)
+            self._inflight.pop(index, None)
             while len(self._cache) > self.max_cached_blocks:
                 self._cache.popitem(last=False)
             self._blocks_read += 1
             self._bytes_read += len(data)
+        if progress_hook is not None:
+            with contextlib.suppress(Exception):
+                progress_hook(len(data), True)
+
+    def _prefetch_after(self, index: int) -> None:
+        """顺序读时把后续块丢进线程池，把单连接串行等待变成并发流水。"""
+        if not self._is_remote or self.prefetch <= 0:
+            return
+        size = self.size
+        with self._lock:
+            for nxt in range(index + 1, index + 1 + self.prefetch):
+                if nxt * self.block_size >= size:
+                    break
+                if nxt in self._cache or nxt in self._inflight:
+                    continue
+                self._inflight[nxt] = _POOL.submit(self._fetch_and_store, nxt)
+
+    def _fetch_and_store(self, index: int) -> bytes:
+        try:
+            data = self._fetch_block(index)
+        except Exception:
+            with self._lock:
+                self._inflight.pop(index, None)
+            raise
+        self._store_block(index, data)
         return data
 
     def _fetch_block(self, index: int) -> bytes:
@@ -200,7 +252,7 @@ class RangeFile(io.RawIOBase):
             try:
                 headers = {**self.headers, "Range": f"bytes={start}-{end}"}
                 buf = bytearray()
-                with self._client.stream("GET", self.url, headers=headers) as resp:
+                with _CONN_SEM, self._client.stream("GET", self.url, headers=headers) as resp:
                     if resp.status_code not in (200, 206):
                         last_exc = DownloadError(
                             f"HTTP {resp.status_code} for {self.url} ({start}-{end})"
@@ -217,10 +269,6 @@ class RangeFile(io.RawIOBase):
                 # 服务端若忽略 Range 返回全量，裁剪到本块
                 if resp.status_code == 200 and len(data) > self.block_size:
                     data = data[start : end + 1]
-                # 整块成功：计入已完成字节（超时重下的分片只推进度条，不重复计数）
-                if progress_hook is not None:
-                    with contextlib.suppress(Exception):
-                        progress_hook(len(data), True)
                 return data
             except httpx.HTTPError as exc:
                 last_exc = exc
@@ -257,9 +305,10 @@ def open_remote(
     *,
     headers: dict[str, str] | None = None,
     block_size: int = DEFAULT_BLOCK,
+    prefetch: int = DEFAULT_PREFETCH,
 ) -> RangeFile:
     """构造 RangeFile（调用方负责 close）。"""
-    return RangeFile(url, headers=headers, block_size=block_size)
+    return RangeFile(url, headers=headers, block_size=block_size, prefetch=prefetch)
 
 
 __all__ = ["RangeFile", "open_remote"]

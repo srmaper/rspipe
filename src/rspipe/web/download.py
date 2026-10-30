@@ -25,10 +25,10 @@ def download_scene_raw(
     *,
     keys=None,
     progress=None,
-    block_size=1 << 23,
+    block_size=1 << 19,
     workers=6,
 ) -> Path:
-    """raw AOI 裁剪下载（8MB 块 × 6 线程，已存在文件跳过）。
+    """raw AOI 裁剪下载（512KB 块 + RangeFile 预取并发，已存在文件跳过）。
 
     `keys`：波段白名单（默认全谱 + SCL/qa_pixel）。
     """

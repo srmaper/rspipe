@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +14,7 @@ import pystac
 from pystac_client import Client as StacApiClient
 
 from rspipe.auth import AuthLike, NoAuth, StaticTokenAuth, TokenProvider
+from rspipe.cache import get_cache
 from rspipe.config import ProviderConfig, Settings
 from rspipe.errors import CredentialError, SearchError
 from rspipe.logging import get_logger
@@ -171,14 +175,33 @@ class StacClient:
         if max_items is not None:
             kwargs["max_items"] = max_items
 
+        cache_key = (
+            "search:"
+            + hashlib.sha1(
+                json.dumps([self.name, kwargs], sort_keys=True, default=str).encode()
+            ).hexdigest()
+        )
+        cache = get_cache()
+        cached_items = cache.get(cache_key)
+        if cached_items is not None:
+            try:
+                scenes = [self.item_to_scene(pystac.Item.from_dict(d)) for d in cached_items]
+                log.info("stac.search", provider=self.name, matched=len(scenes), cached=True)
+                return scenes
+            except Exception:
+                pass  # 缓存损坏就走网络
+
         try:
             search = self.client.search(**kwargs)
             items = list(search.items())
         except Exception as exc:
             raise SearchError(f"STAC search failed on {self.name}: {exc}") from exc
 
+        with contextlib.suppress(Exception):
+            cache.put(cache_key, [it.to_dict() for it in items])
+
         scenes = [self.item_to_scene(it) for it in items]
-        log.info("stac.search", provider=self.name, matched=len(scenes))
+        log.info("stac.search", provider=self.name, matched=len(scenes), cached=False)
         return scenes
 
     @staticmethod
