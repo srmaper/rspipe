@@ -94,6 +94,11 @@
             </table>
           </div>
         </div>
+
+        <div class="card logbox">
+          <h3>日志</h3>
+          <div class="log" ref="logEl">{{ logs.join('\n') }}</div>
+        </div>
       </div>
     </div>
 
@@ -131,6 +136,16 @@ const INDICES = [
 const guideOpen = ref(false)
 const resultVisible = ref(true)
 const comparing = ref(false)
+const logs = ref([])
+const logEl = ref(null)
+
+function logLn(s) {
+  logs.value.push(`[${new Date().toLocaleTimeString()}] ${s}`)
+  if (logs.value.length > 300) logs.value = logs.value.slice(-200)
+  requestAnimationFrame(() => {
+    if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight
+  })
+}
 const swipe = ref(null)
 const extentVisible = ref(true)
 const mode = ref('single')
@@ -205,6 +220,7 @@ async function loadScenes() {
   try {
     const r = await fetch('/api/analysis/scenes')
     scenes.value = await r.json()
+    logLn(`已下载影像 ${scenes.value.length} 景`)
   } catch (e) {
     error.value = '读取已下载影像失败'
   }
@@ -213,6 +229,9 @@ async function loadScenes() {
 async function run() {
   running.value = true
   error.value = ''
+  logLn(mode.value === 'single'
+    ? `计算 ${index.value.toUpperCase()} · ${sceneA.value}`
+    : `两期变化 ${index.value.toUpperCase()} · A=${sceneA.value} B=${sceneB.value}`)
   stats.value = null
   try {
     if (mode.value === 'single') {
@@ -226,8 +245,9 @@ async function run() {
         }),
       })
       const j = await r.json()
-      if (!j.ok) { error.value = j.error || '计算失败'; return }
+      if (!j.ok) { error.value = j.error || '计算失败'; logLn('失败: ' + error.value); return }
       stats.value = { ...j.stats, ...j.classify }
+      logLn(`完成 · 均值 ${j.stats.mean} · 有效 ${j.stats.area_km2} km²`)
       tileTemplate.value = j.tiles
       preview.value = {
         scene_id: sceneA.value, ready: true,
@@ -244,8 +264,9 @@ async function run() {
         }),
       })
       const j = await r.json()
-      if (!j.ok) { error.value = j.error || '计算失败'; return }
+      if (!j.ok) { error.value = j.error || '计算失败'; logLn('失败: ' + error.value); return }
       stats.value = j.stats
+      logLn(`变化完成 · 减少 ${j.stats.decrease_km2} km² / 增加 ${j.stats.increase_km2} km²`)
       tileTemplate.value = j.tiles
       const bounds = statsBounds()
       preview.value = { scene_id: j.key, ready: true, bounds }
@@ -254,6 +275,7 @@ async function run() {
     }
   } catch (e) {
     error.value = '请求失败：' + (e.message || e)
+    logLn(error.value)
   } finally {
     running.value = false
   }
@@ -277,10 +299,12 @@ async function computeOne(sid) {
 
 async function openSwipe() {
   comparing.value = true
+  logLn(`双屏对比准备 · ${index.value.toUpperCase()}`)
   error.value = ''
   try {
     const ja = await computeOne(sceneA.value)
     const jb = await computeOne(sceneB.value)
+    logLn('双屏对比就绪')
     swipe.value = {
       tileA: ja.tiles,
       tileB: jb.tiles,
@@ -326,6 +350,13 @@ onMounted(loadScenes)
 #center { flex: 1; position: relative; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
 #right { width: 330px; flex: none; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
 .reslist { flex: 1; min-height: 0; overflow: auto; }
+.logbox { flex: none; height: 200px; display: flex; flex-direction: column; }
+.log {
+  flex: 1; min-height: 0; overflow: auto;
+  background: #12161d; color: #c8d3e0;
+  font: 11px/1.55 Consolas, "Microsoft YaHei UI", monospace;
+  padding: 8px 10px; border-radius: 10px; white-space: pre-wrap;
+}
 .guide-entry { cursor: pointer; }
 .guide-entry:hover { border-color: var(--accent); }
 .ge-desc { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
