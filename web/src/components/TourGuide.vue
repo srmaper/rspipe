@@ -33,11 +33,16 @@ const cur = computed(() => props.steps[index.value] || { title: '', text: '' })
 function measure() {
   const step = props.steps[index.value]
   if (!step) return
-  const el = document.querySelector(step.selector)
+  const el = document.querySelector(step.selector) || (step.fallback ? document.querySelector(step.fallback) : null)
   if (!el) {
-    // 该步目标不存在（如还没检索、没有结果卡片）→ 自动跳过
+    // 目标可能还没渲染（列表异步刷新）→ 先等 350ms 再确认，确实没有才跳过
     rect.value = { x: 0, y: 0, w: 0, h: 0 }
-    skipMissing()
+    clearTimeout(missingTimer)
+    missingTimer = setTimeout(() => {
+      const again = document.querySelector(step.selector) || (step.fallback ? document.querySelector(step.fallback) : null)
+      if (!again) skipMissing()
+      else measure()
+    }, 350)
     return
   }
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -70,6 +75,7 @@ const tipStyle = computed(() => {
 })
 
 let skipping = false
+let missingTimer = null
 function skipMissing() {
   if (skipping) return
   skipping = true
@@ -96,6 +102,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
+  clearTimeout(missingTimer)
   window.removeEventListener('resize', measure)
   window.removeEventListener('scroll', measure, true)
   window.removeEventListener('keydown', onKey)

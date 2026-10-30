@@ -169,6 +169,7 @@ const TOUR_STEPS = [
   },
   {
     selector: '#tour-results .scene button',
+    fallback: '#tour-results',
     title: '选择波段下载',
     text: '点「下载影像」弹出波段选择（默认 RGBN + SCL/云标志）。只下需要的波段可以省时间；下载完成会自动生成 4326 预览栅格与 AOI 记录。',
     padding: 4,
