@@ -11,6 +11,16 @@
 同时它也是一条完整的离线处理链：接入 → 归一化 → COG → 去云 → 匀色 → 镶嵌 → STAC → 检索/预览/下载，
 可用命令行批量跑城市级数据。
 
+## 下载安装（Windows，免环境）
+
+**[⬇ rspipe-0.1.0-setup.exe](https://github.com/srmaper/rspipe/releases/download/v0.1.0/rspipe-0.1.0-setup.exe)** · 142 MB · 免 Python / Node / GDAL
+
+双击安装即可，无需管理员权限；装到 `%LOCALAPPDATA%\Programs\rspipe`，
+数据保存在 `%LOCALAPPDATA%\rspipe\data`（卸载不删数据）。
+启动后浏览器自动打开 `http://127.0.0.1:8000`。
+
+> 源码运行 / 二次开发见下文「快速开始」。
+
 | 能力 | 模块 |
 |---|---|
 | 数据接入、归一化、COG 转换 | `clients` `ingest` `normalize` |
