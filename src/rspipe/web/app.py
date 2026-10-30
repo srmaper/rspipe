@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from datetime import date, datetime
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from .tiles import render_cog_tile_subrect, render_raster_tile
 
 log = logging.getLogger(__name__)
 
-ROOT = Path(__file__).resolve().parents[3]  # 仓库根（web/app.py 在 src/rspipe/web/ 下）
+ROOT = Path(os.environ.get("RSPIPE_ROOT") or Path(__file__).resolve().parents[3])  # 仓库根（打包后可被 RSPIPE_ROOT 覆盖）
 DIST = ROOT / "web" / "dist"
 
 PROVIDERS_MAP = {
