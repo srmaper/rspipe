@@ -9,10 +9,20 @@
     <div id="top">
       <!-- 左栏 -->
       <div id="left">
-        <AoiCard :bbox="bbox" :aoi-name="aoiName" :active="aoiTool"
-                 :area="aoiArea" :limit="AREA_LIMIT"
-                 @set="onToolBtn" @clear="clearAoi" />
-        <SearchCard v-model:cfg="sCfg" :loading="searching" :bbox-ready="!!bbox" @search="onSearch" />
+        <div class="card guide-entry" id="tour-guide" @click="startTour">
+          <h3>操作指引</h3>
+          <div class="ge-desc">6 步走完：圈范围 → 检索 → 下载 → 预览 → 分析</div>
+          <button class="primary ge-btn">开始指引</button>
+        </div>
+
+        <div id="tour-aoi">
+          <AoiCard :bbox="bbox" :aoi-name="aoiName" :active="aoiTool"
+                   :area="aoiArea" :limit="AREA_LIMIT"
+                   @set="onToolBtn" @clear="clearAoi" />
+        </div>
+        <div id="tour-search">
+          <SearchCard v-model:cfg="sCfg" :loading="searching" :bbox-ready="!!bbox" @search="onSearch" />
+        </div>
             <div class="card" id="logbox">
           <h3>日志</h3>
           <div id="log" ref="logEl">{{ logs.join('\n') }}</div>
@@ -20,7 +30,7 @@
       </div>
 
       <!-- 中央地图 -->
-      <div id="center">
+      <div id="center" data-tour="map">
         <MapCanvas
           ref="mapRef"
           :footprints="footprints"
@@ -45,7 +55,7 @@
 
       <!-- 右栏 -->
       <div id="right">
-        <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:0">
+        <div class="card" id="tour-results" style="flex:1; display:flex; flex-direction:column; min-height:0">
           <h3>检索结果</h3>
           <div id="scenes" class="scenelist">
             <div v-if="!groups.length" class="hint">先设置 AOI 并检索。结果按 Tier1 > AOI实测云量 > 覆盖度 排序。</div>
@@ -66,12 +76,15 @@
             </div>
           </div>
         </div>
-        <TasksCard :jobs="jobs" @preview="onTaskPreview" @meta="onTaskMeta" @download="onTaskDownload" @delete="onTaskDelete" />
+        <div id="tour-tasks">
+          <TasksCard :jobs="jobs" @preview="onTaskPreview" @meta="onTaskMeta" @download="onTaskDownload" @delete="onTaskDelete" />
+        </div>
       </div>
     </div>
 
     <SceneDrawer v-if="detail" :detail="detail" @close="detail = null" />
     <MessageBox ref="msgBox" />
+    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" @close="tourOpen = false" />
     <BandPicker
       v-if="bandPick"
       :sid="bandPick.sid"
@@ -92,6 +105,7 @@ import SceneCard from './SceneCard.vue'
 import SceneDrawer from './SceneDrawer.vue'
 import BandPicker from './BandPicker.vue'
 import MessageBox from './MessageBox.vue'
+import TourGuide from './TourGuide.vue'
 import TasksCard from './TasksCard.vue'
 
 const mapRef = ref(null)
@@ -139,6 +153,45 @@ const sCfg = ref({
   ],
 })
 const msgBox = ref(null)
+const tourOpen = ref(false)
+
+const TOUR_STEPS = [
+  {
+    selector: '#tour-aoi',
+    title: '设置下载范围',
+    text: '用「框选矩形」在地图上拖出范围，或用「位置搜索」输入地名。范围面积上限 500 km²（约 22×22 km），超出会提示并阻止提交。',
+  },
+  {
+    selector: '#tour-search',
+    title: '设置检索条件',
+    text: '选择时间范围与整景云量上限（建议 ≤10%），勾选数据源后点「检索」。结果会按 Tier1 > AOI 实测云量 > 覆盖度 排序。',
+  },
+  {
+    selector: '#tour-results',
+    title: '查看检索结果',
+    text: '右侧列出候选影像：绿色徽章是 Tier，AOI云 是范围内实测云量，覆盖 是与你圈定范围的交集比例。点景名可看元数据。',
+  },
+  {
+    selector: '#tour-results .scene button',
+    title: '选择波段下载',
+    text: '点「下载影像」弹出波段选择（默认 RGBN + SCL/云标志）。只下需要的波段可以省时间；下载完成会自动生成 4326 预览栅格与 AOI 记录。',
+    padding: 4,
+  },
+  {
+    selector: '#tour-tasks',
+    title: '任务与预览',
+    text: '任务卡显示进度；完成后可「预览」叠加影像（真彩/假彩/NDVI）、「元数据」查看字段、「下载」导出 zip、「删除」清理本地产物。',
+  },
+  {
+    selector: '#center',
+    title: '地图操作',
+    text: '左上切换真彩/假彩/NDVI 与范围显示，右下切换卫星影像/矢量底图，底部显示鼠标经纬度，左下是比例尺。',
+  },
+]
+
+function startTour() {
+  tourOpen.value = true
+}
 const aoiArea = ref(0)          // AOI 面积 km²
 const AREA_LIMIT = 500          // 单次下载面积上限 km²
 let toastTimer = null
@@ -493,5 +546,9 @@ defineEmits(['home'])
   box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .channelbar button { min-height: 26px; padding: 2px 10px; font-size: 11.5px; white-space: nowrap; }
+.guide-entry { cursor: pointer; }
+.guide-entry:hover { border-color: var(--accent); }
+.ge-desc { font-size: 11.5px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
+.ge-btn { width: 100%; }
 .back { flex: none; }
 </style>
