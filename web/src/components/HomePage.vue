@@ -8,7 +8,7 @@
     <main class="cards">
       <section class="card big" @click="$emit('go', 'download')">
         <div class="ico">🛰</div>
-        <h2>下载影像</h2>
+        <h2>下载遥感影像</h2>
         <p>圈选范围或搜索地名 → 检索场景（Tier / AOI 实测云量排序）→ 选择波段下载<br>
            自动生成 4326 预览栅格与 AOI 记录，支持真彩 / 假彩 / NDVI 预览</p>
         <span class="go">进入 →</span>
@@ -16,7 +16,7 @@
 
       <section class="card big" @click="$emit('go', 'analysis')">
         <div class="ico">📊</div>
-        <h2>数据分析</h2>
+        <h2>遥感数据分析</h2>
         <p>基于已下载影像做指数计算与专题分析：城市扩张、绿地率、植被长势、<br>
            水体提取、火烧迹地、洪涝范围、违法占地、灾前灾后对比</p>
         <span class="go">进入 →</span>
