@@ -189,6 +189,52 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 **瓦片渲染**：本地 processed COG 优先，其次本地 raw 波段；都没有返回 204（不回落云端）。
 按"瓦片 ∩ 影像范围"求交贴到 256 画布，无值区透明；每通道 2%~98% 拉伸。
 
+### 检索响应字段
+
+`POST /api/search` 返回**按数据源分组**的结构：
+
+```json
+{
+  "bbox": [112.5, 37.7, 112.6, 37.8],
+  "groups": [
+    {
+      "provider": "earth-search",
+      "collection": "sentinel-2-l2a",
+      "total": 9,
+      "kept": 9,
+      "table": "scene tier AOI云% 景云% 重叠% …",
+      "scenes": [ /* 前 20 条 */ ]
+    }
+  ]
+}
+```
+
+| 分组字段 | 含义 |
+|---|---|
+| `total` / `kept` | STAC 返回景数 / 通过覆盖度门槛并参与排名的景数 |
+| `table` | 纯文本排行表（日志与 CLI 复用） |
+| `scenes` | 按评分排序的前 20 条 |
+
+每景（`SceneOut`）：
+
+| 字段 | 单位/取值 | 说明 |
+|---|---|---|
+| `scene_id` | — | 唯一 id，后续接口都用它 |
+| `datetime` | ISO8601 UTC | 成像时间 |
+| `cloud_cover` | 0–100 | 整景云量（`eo:cloud_cover`，185 km 级口径） |
+| `aoi_cloud` | 0–1 / `null` | AOI 内实测云+云影占比；`null`=无法实测 |
+| `overlap` | 0–1 | 景 footprint 与 AOI 的重叠占比 |
+| `tier` | `T1` / `T2` / `null` | Landsat Collection 2 级别（S2 为 null） |
+| `footprint` | GeoJSON | 景的真实覆盖范围（非矩形） |
+| `bbox` | `[minx,miny,maxx,maxy]` | 景范围外包框（EPSG:4326） |
+| `thumbnail` | URL / `null` | 预留，当前恒为 null |
+| `has_raw` / `has_cog` | bool | 本地是否已有原始波段 / 处理后 COG |
+| `raw_bounds` / `cog_bounds` | bbox / `null` | 本地产物实际范围，前端据此 `fitBounds` |
+
+排序：`Tier 罚分×1000 + 云量×10 − 覆盖度` 升序（Tier1 → AOI 云量少 → 覆盖度高）。
+
+> 检索**不返回**资产地址与波段清单，需调 `GET /api/scenes/{provider}/{id}`。
+
 ---
 
 ## 处理链
