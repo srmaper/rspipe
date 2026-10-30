@@ -23,9 +23,9 @@ Landsat / Sentinel-2 的**接入 → 归一化 → COG → 去云 → 匀色 →
 |---|---|
 | ![分析](docs/screenshots/03-analysis.png) | ![指南](docs/screenshots/04-guide.png) |
 
-| 操作指引（分步高亮） |
-|---|
-| ![指引](docs/screenshots/05-tour.png) |
+| 操作指引（下载页） | 操作指引（分析页） |
+|---|---|
+| ![指引](docs/screenshots/05-tour.png) | ![分析指引](docs/screenshots/07-analysis-tour.png) |
 
 ---
 
