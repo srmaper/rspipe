@@ -53,6 +53,9 @@ scripts\web_server.cmd   # 杀旧实例并启动，监听 8000（崩溃自动拉
 |---|---|
 | `#/` | 首页（下载影像 / 数据分析 两个入口） |
 | `#/download` | 检索 · AOI 圈选 · 选波段下载 · 真彩/假彩/NDVI 预览 · 导出 zip |
+
+> 单次下载 AOI 面积上限 **500 km²**（约 22 km × 22 km），超限会在页面中央提示并阻止提交；
+> 更大范围请分块下载后用 `rspipe mosaic` 镶嵌。
 | `#/analysis` | 指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比 |
 
 > 仓库不含 `data/`（下载与计算产物，运行时生成，见 `data/README.md`）。
