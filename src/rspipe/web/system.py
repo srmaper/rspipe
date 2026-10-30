@@ -115,7 +115,10 @@ def restart_service() -> dict:
         return {"ok": False, "error": "缺少 scripts/web_server.cmd"}
     flags = 0
     if os.name == "nt":
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        # 这两个常量只在 Windows 上存在
+        flags = int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) | int(
+            getattr(subprocess, "DETACHED_PROCESS", 0)
+        )
     subprocess.Popen(
         ["cmd", "/c", f'timeout /t 2 >nul & "{cmd}"'],
         cwd=str(ROOT),
