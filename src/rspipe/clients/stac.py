@@ -174,6 +174,8 @@ class StacClient:
             kwargs["query"] = query
         if max_items is not None:
             kwargs["max_items"] = max_items
+            # 每页条数=总数，避免 pystac-client 按默认 limit=10 分页（5 次往返）
+            kwargs["limit"] = max_items
 
         cache_key = (
             "search:"
