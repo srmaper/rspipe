@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "name": "aoi-shenzhen",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "shenzhen",
+        "name": "Shenzhen (深圳市)",
+        "admin_level": "prefecture-level city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [113.760, 22.410],
+            [114.620, 22.410],
+            [114.620, 22.870],
+            [113.760, 22.870],
+            [113.760, 22.410]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "name": "aoi-taiyuan",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "taiyuan",
+        "name": "Taiyuan (太原市)",
+        "admin_level": "prefecture-level city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [112.150, 37.550],
+            [112.900, 37.550],
+            [112.900, 38.200],
+            [112.150, 38.200],
+            [112.150, 37.550]
+          ]
+        ]
+      }
+    }
+  ]
+}

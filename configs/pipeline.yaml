@@ -1,0 +1,40 @@
+# 流水线 / 调度配置
+
+pipeline:
+  name: default
+  # 感兴趣区：GeoJSON 文件路径（Polygon / MultiPolygon）
+  aoi: configs/aoi.geojson
+  # 时间窗（run 时按水位线增量收窄）
+  start: null                # ISO8601，如 2026-01-01
+  end: null                  # 留空 = now
+  # 景级云量上限（%）
+  max_cloud_cover: 30.0
+  # 参与处理的传感器（对应 configs/sensors.yaml 中的 key）
+  sensors: [landsat-8-oli, sentinel-2-msi]
+  # 参与处理的数据源（对应 configs/providers.yaml 中的 key）
+  # earth-search / planetary-computer 零凭证可用
+  # usgs-landsat 资产需 EROS 账号；cdse-s2 需 OAuth2
+  providers: [earth-search, planetary-computer, usgs-landsat, cdse-s2]
+  # 单景输出波段（通用名）
+  bands: [red, green, blue, nir]
+
+schedule:
+  # cron 表达式（APScheduler），默认每天 UTC 02:00
+  cron:
+    hour: 2
+    minute: 0
+    timezone: UTC
+  # 增量回溯窗口（天），避免漏景
+  lookback_days: 3
+  # 单次 run 最多处理景数
+  max_scenes_per_run: 50
+  # 失败重试次数
+  max_retries: 2
+
+storage:
+  # 覆盖 .env 中的 RSPIPE_DATA_ROOT（留空则用环境变量 / 默认 ./data）
+  root: null
+
+logging:
+  level: INFO
+  json: false

@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 环境与密钥
+.env
+
+# 运行时数据（保留目录说明）
+data/*
+!data/README.md
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# 前端依赖（web/dist 保留，便于免构建直接运行）
+web/node_modules/
+node_modules/
+
+# 系统
+.DS_Store
+Thumbs.db

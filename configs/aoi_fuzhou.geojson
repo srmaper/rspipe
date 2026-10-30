@@ -1,0 +1,27 @@
+{
+  "type": "FeatureCollection",
+  "name": "aoi-fuzhou",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "fuzhou",
+        "name": "Fuzhou (福州市)",
+        "admin_level": "prefecture-level city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [119.000, 25.850],
+            [119.750, 25.850],
+            [119.750, 26.350],
+            [119.000, 26.350],
+            [119.000, 25.850]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+# 传感器波段映射、QA 位定义与定标约定
+# 所有系数优先从产品元数据（MTL / MTD / STAC 属性）读取，
+# 以下仅作为元数据缺失时的兜底默认值。
+
+sensors:
+
+  landsat-8-oli:
+    alias: [landsat-9-oli, landsat_ot_c2]
+    band_map:          # 通用名 -> 产品波段名
+      blue: B2
+      green: B3
+      red: B4
+      nir: B5
+      swir1: B6
+      swir2: B7
+    qa_band: QA_PIXEL
+    qa_bits:           # Landsat Collection 2 QA_PIXEL 位定义
+      fill: 0
+      dilated_cloud: 1
+      cirrus: 2
+      cloud: 3
+      cloud_shadow: 4
+      snow: 5
+      water: 6
+    # C2 L2 地表反射率兜底定标（优先用 MTL 的 REFLECTANCE_MULT/ADD_BAND_x）
+    reflectance_scale: 2.75e-05
+    reflectance_offset: -0.2
+    valid_dn_range: [7273, 43633]
+    reflectance_range: [0.0, 1.0]
+
+  landsat-7-etm:
+    alias: [landsat_7_c2]
+    band_map:
+      blue: B1
+      green: B2
+      red: B3
+      nir: B4
+      swir1: B5
+      swir2: B7
+    qa_band: QA_PIXEL
+    qa_bits:
+      fill: 0
+      dilated_cloud: 1
+      cirrus: 2
+      cloud: 3
+      cloud_shadow: 4
+      snow: 5
+      water: 6
+    reflectance_scale: 2.75e-05
+    reflectance_offset: -0.2
+    valid_dn_range: [7273, 43633]
+    reflectance_range: [0.0, 1.0]
+
+  sentinel-2-msi:
+    alias: [sentinel-2a, sentinel-2b, sentinel-2c, S2MSI2A, S2MSI1C]
+    band_map:
+      blue: B02
+      green: B03
+      red: B04
+      nir: B08
+      rededge1: B05
+      rededge2: B06
+      rededge3: B07
+      nir_narrow: B8A
+      swir1: B11
+      swir2: B12
+      coastal: B01
+      cirrus: B10
+    qa_band: SCL            # L2A 场景分类层；L1C 无 SCL，退化到云概率
+    scl_values:             # SCL 类别 -> 是否保留
+      0: false              # no data
+      1: false              # saturated or defective
+      2: true               # dark area pixels
+      3: false              # cloud shadow
+      4: true               # vegetation
+      5: true               # not vegetated
+      6: true               # water
+      7: false              # unclassified
+      8: false              # cloud medium probability
+      9: false              # cloud high probability
+      10: false             # thin cirrus
+      11: true              # snow or ice
+    # S2 PB >= 04.00 优先用 MTD 的 RADIO_ADD_OFFSET / QUANTIFICATION_VALUE
+    reflectance_scale: 1.0e-04
+    reflectance_offset: 0.0
+    valid_dn_range: [1, 65535]
+    reflectance_range: [0.0, 1.0]
+
+# 归一化输出约定
+normalize:
+  target_dtype: float32
+  target_nodata: .nan
+  # 目标网格（留空则保持源 CRS / 分辨率，仅对齐 extent）
+  target_crs: null
+  target_resolution: null
+
+# 去云默认参数
+cloud_mask:
+  buffer_pixels: 3          # 掩膜形态学膨胀半径
+  max_cloud_cover: 30.0     # 景级云量阈值，超过则整景跳过
+  keep_snow: true
+  keep_water: true
+
+# 匀色默认参数
+color_balance:
+  method: histogram         # histogram | quantile | none
+  reference: best           # best | first | <scene_id>
+  quantiles: [2.0, 98.0]
+
+# 镶嵌默认参数
+mosaic:
+  feather: distance         # distance | first | mean
+  blend_distance: 64        # 羽化过渡带宽度（像元）
+  dtype: float32

@@ -1,0 +1,331 @@
+"""影像分析：指数计算（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、统计与瓦片。
+
+输入：data/raw/<provider>/<scene>/<scene>.<band>.tif（下载产物）
+输出：data/analysis/<key>/<name>.tif（EPSG:4326，float32）+ meta.json
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
+import numpy as np
+
+# name -> (所需波段, 说明)
+INDICES = {
+    "ndvi": (("red", "nir"), "归一化植被指数 (NIR-R)/(NIR+R)"),
+    "ndwi": (("green", "nir"), "归一化水体指数 (G-NIR)/(G+NIR)"),
+    "ndbi": (("swir16", "nir"), "归一化建筑指数 (SWIR1-NIR)/(SWIR1+NIR)"),
+    "nbr": (("nir", "swir22"), "归一化燃烧指数 (NIR-SWIR2)/(NIR+SWIR2)"),
+    "bsi": (("swir16", "red", "nir", "blue"), "裸土指数 ((SWIR1+R)-(NIR+B))/((SWIR1+R)+(NIR+B))"),
+    "ndre": (("nir", "rededge1"), "红边叶绿素指数 (NIR-RE1)/(NIR+RE1)"),
+}
+
+# 伪彩：低 → 中 → 高
+COLORMAPS = {
+    "ndvi": [(139, 110, 80), (230, 215, 120), (0, 120, 55)],
+    "ndwi": [(150, 120, 80), (245, 245, 245), (20, 70, 160)],
+    "ndbi": [(0, 120, 55), (220, 220, 220), (200, 40, 40)],
+    "nbr": [(40, 40, 40), (250, 200, 40), (0, 110, 60)],
+    "bsi": [(240, 240, 240), (190, 170, 140), (110, 80, 50)],
+    "ndre": [(139, 110, 80), (235, 220, 120), (0, 130, 60)],
+}
+
+BAND_ALIASES = {
+    "nir": ("nir", "nir08"),
+    "swir16": ("swir16", "swir1"),
+    "swir22": ("swir22", "swir2"),
+    "rededge1": ("rededge1", "red_edge_1"),
+}
+
+
+def _band_path(raw_dir: Path, sid: str, key: str) -> Path | None:
+    for cand in BAND_ALIASES.get(key, (key,)):
+        f = raw_dir / f"{sid}.{cand}.tif"
+        if f.exists():
+            return f
+    return None
+
+
+def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
+    """读所需波段到统一网格（以 red/第一个可用波段为基准），返回 (bands, transform, crs)。"""
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.warp import reproject
+
+    paths = {}
+    for k in keys:
+        p = _band_path(raw_dir, sid, k)
+        if p is None:
+            return None, None, None, [k]
+        paths[k] = p
+
+    ref_key = "red" if "red" in paths else next(iter(paths))
+    with rasterio.open(paths[ref_key]) as ref:
+        height, width = ref.height, ref.width
+        transform, crs = ref.transform, ref.crs
+        out = {}
+        for k, p in paths.items():
+            with rasterio.open(p) as src:
+                same = (src.width, src.height) == (width, height) and src.transform == transform and src.crs == crs
+                if same:
+                    arr = src.read(1).astype("float32")
+                else:
+                    arr = np.zeros((height, width), dtype="float32")
+                    reproject(
+                        source=rasterio.band(src, 1), destination=arr,
+                        src_transform=src.transform, src_crs=src.crs,
+                        dst_transform=transform, dst_crs=crs,
+                        resampling=Resampling.bilinear,
+                    )
+            arr = arr * 2.75e-05 - 0.2 if "landsat" in collection else arr / 10000.0
+            arr[arr <= 0] = np.nan
+            out[k] = arr
+    return out, transform, crs, []
+
+
+def _index_array(name: str, b: dict) -> np.ndarray:
+    with np.errstate(invalid="ignore", divide="ignore"):
+        if name == "ndvi":
+            return (b["nir"] - b["red"]) / (b["nir"] + b["red"])
+        if name == "ndwi":
+            return (b["green"] - b["nir"]) / (b["green"] + b["nir"])
+        if name == "ndbi":
+            return (b["swir16"] - b["nir"]) / (b["swir16"] + b["nir"])
+        if name == "nbr":
+            return (b["nir"] - b["swir22"]) / (b["nir"] + b["swir22"])
+        if name == "bsi":
+            a = (b["swir16"] + b["red"]) - (b["nir"] + b["blue"])
+            c = (b["swir16"] + b["red"]) + (b["nir"] + b["blue"])
+            return a / c
+        if name == "ndre":
+            return (b["nir"] - b["rededge1"]) / (b["nir"] + b["rededge1"])
+    raise ValueError(f"unknown index {name}")
+
+
+def compute_scene_index(
+    data_root: Path, provider: str, scene_id: str, collection: str, index: str
+) -> dict:
+    """计算单景指数：写 4326 栅格 + 统计。"""
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.warp import calculate_default_transform, reproject
+
+    raw_dir = Path(data_root) / "raw" / provider / scene_id
+    if not raw_dir.is_dir():
+        return {"ok": False, "error": "该景未下载"}
+    keys, desc = INDICES[index]
+    bands, transform, crs, missing = _read_grid(raw_dir, scene_id, keys, collection)
+    if bands is None:
+        return {"ok": False, "error": "缺少波段：" + ", ".join(missing)}
+
+    arr = _index_array(index, bands)
+    valid = np.isfinite(arr)
+    if not valid.any():
+        return {"ok": False, "error": "无有效像元"}
+
+    # 面积统计（原生网格，米制）
+    px_area = abs(transform[0] * transform[4])  # 像元面积 m²
+    total_km2 = float(valid.sum()) * px_area / 1e6
+    vals = arr[valid]
+
+    # 输出到 4326
+    dst_crs = "EPSG:4326"
+    with rasterio.open(_band_path(raw_dir, scene_id, "red") or _band_path(raw_dir, scene_id, keys[0])) as src0:
+        src_bounds = src0.bounds
+    dt, dw, dh = calculate_default_transform(crs, dst_crs, arr.shape[1], arr.shape[0], *src_bounds)
+    out = np.full((dh, dw), np.nan, dtype="float32")
+    reproject(
+        source=arr, destination=out,
+        src_transform=transform, src_crs=crs,
+        dst_transform=dt, dst_crs=dst_crs,
+        resampling=Resampling.bilinear, dst_nodata=float("nan"),
+    )
+
+    dest_dir = Path(data_root) / "analysis" / scene_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{index}.tif"
+    with rasterio.open(
+        dest, "w", driver="GTiff", height=dh, width=dw, count=1, dtype="float32",
+        crs=dst_crs, transform=dt, nodata=float("nan"),
+        compress="deflate", tiled=True, blockxsize=512, blockysize=512,
+    ) as d:
+        d.write(out, 1)
+        d.set_band_description(1, index)
+        d.update_tags(index=index, description=desc, scene_id=scene_id)
+
+    stats = {
+        "index": index,
+        "description": desc,
+        "mean": round(float(np.nanmean(vals)), 4),
+        "median": round(float(np.nanmedian(vals)), 4),
+        "p10": round(float(np.nanpercentile(vals, 10)), 4),
+        "p90": round(float(np.nanpercentile(vals, 90)), 4),
+        "min": round(float(np.nanmin(vals)), 4),
+        "max": round(float(np.nanmax(vals)), 4),
+        "valid_fraction": round(float(valid.mean()), 4),
+        "area_km2": round(total_km2, 2),
+        "bounds": [round(v, 5) for v in rasterio.open(dest).bounds],
+    }
+    (dest_dir / f"{index}.json").write_text(
+        json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return {"ok": True, "stats": stats}
+
+
+def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, threshold: float) -> dict:
+    """按阈值统计"大于阈值"的面积（绿地率/水体占比等）。"""
+    import rasterio
+
+    f = Path(data_root) / "analysis" / scene_id / f"{index}.tif"
+    if not f.exists():
+        return {}
+    with rasterio.open(f) as src:
+        a = src.read(1)
+        # 近似面积：用 4326 网格估算（纬度加权）
+        h, w = a.shape
+        left, bottom, right, top = src.bounds
+        lat_mid = math.radians((bottom + top) / 2)
+        dx = (right - left) * 111320 * math.cos(lat_mid) / w
+        dy = (top - bottom) * 110540 / h
+        px_km2 = dx * dy / 1e6
+    valid = np.isfinite(a)
+    above = valid & (a > threshold)
+    total = float(valid.sum()) * px_km2
+    hit = float(above.sum()) * px_km2
+    return {
+        "threshold": threshold,
+        "above_area_km2": round(hit, 2),
+        "valid_area_km2": round(total, 2),
+        "above_ratio": round(hit / total, 4) if total else 0.0,
+    }
+
+
+def _bounds_of(path: Path):
+    import rasterio
+
+    with rasterio.open(path) as s:
+        return tuple(s.bounds)
+
+
+def compute_change(
+    data_root: Path, provider: str, a: str, b: str, collection: str, index: str, threshold: float
+) -> dict:
+    """两期指数差值（b - a）与变化面积统计。"""
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.warp import reproject
+
+    # 缺结果时自动补算两期（同一 provider）
+    for sid in (a, b):
+        f = Path(data_root) / "analysis" / sid / f"{index}.tif"
+        if not f.exists():
+            coll = collection or ("landsat-c2-l2" if sid.startswith("L") else "sentinel-2-l2a")
+            res = compute_scene_index(data_root, provider, sid, coll, index)
+            if not res.get("ok"):
+                return {"ok": False, "error": f"{sid} 计算失败：{res.get('error')}"}
+
+    fa = Path(data_root) / "analysis" / a / f"{index}.tif"
+    fb = Path(data_root) / "analysis" / b / f"{index}.tif"
+
+    with rasterio.open(fa) as sa, rasterio.open(fb) as sb:
+        dst = np.full((sa.height, sa.width), np.nan, dtype="float32")
+        src_b = sb.read(1).astype("float32")
+        reproject(
+            source=src_b, destination=dst,
+            src_transform=sb.transform, src_crs=sb.crs,
+            dst_transform=sa.transform, dst_crs=sa.crs,
+            resampling=Resampling.bilinear, dst_nodata=float("nan"),
+        )
+        arr_a = sa.read(1)
+        transform, crs = sa.transform, sa.crs
+
+    diff = dst - arr_a
+    valid = np.isfinite(diff)
+    if not valid.any():
+        return {"ok": False, "error": "两期无重叠有效像元"}
+
+    # 4326 网格 → 米制像元面积（纬度加权）
+    left, bottom, right, top = _bounds_of(fa)
+    h, w = diff.shape
+    lat_mid = math.radians((bottom + top) / 2)
+    px_area = ((right - left) * 111320 * math.cos(lat_mid) / w) * ((top - bottom) * 110540 / h)
+    vals = diff[valid]
+    dec = valid & (diff < -threshold)
+    inc = valid & (diff > threshold)
+
+    key = f"{a}__{b}"
+    dest_dir = Path(data_root) / "analysis" / key
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{index}_change.tif"
+    with rasterio.open(
+        dest, "w", driver="GTiff", height=diff.shape[0], width=diff.shape[1], count=1,
+        dtype="float32", crs=crs, transform=transform, nodata=float("nan"),
+        compress="deflate", tiled=True, blockxsize=512, blockysize=512,
+    ) as d:
+        d.write(diff, 1)
+        d.set_band_description(1, f"{index}_change")
+        d.update_tags(index=index, kind="change", a=a, b=b)
+
+    stats = {
+        "index": index,
+        "kind": "change",
+        "a": a,
+        "b": b,
+        "threshold": threshold,
+        "mean_diff": round(float(np.nanmean(vals)), 4),
+        "decrease_km2": round(float(dec.sum()) * px_area / 1e6, 2),
+        "increase_km2": round(float(inc.sum()) * px_area / 1e6, 2),
+        "valid_km2": round(float(valid.sum()) * px_area / 1e6, 2),
+    }
+    (dest_dir / f"{index}_change.json").write_text(
+        json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return {"ok": True, "key": key, "stats": stats}
+
+
+def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: int) -> bytes | None:
+    """指数/变化栅格 → 伪彩瓦片。"""
+    import io
+
+    import rasterio
+    from PIL import Image
+    from rasterio.enums import Resampling
+    from rasterio.windows import Window
+
+    from rspipe.web.tiles import TILE, plan_tile_window, tile_bounds
+
+    f = Path(data_root) / "analysis" / key / f"{name}.tif"
+    if not f.exists():
+        return None
+    with rasterio.open(f) as src:
+        plan = plan_tile_window(src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y))
+        if plan is None:
+            return None
+        (dx0, dy0, dx1, dy1), (col, row, w, h) = plan
+        arr = src.read(1, window=Window(col, row, w, h), out_shape=(dy1 - dy0, dx1 - dx0),
+                       resampling=Resampling.bilinear).astype("float32")
+
+    is_change = name.endswith("_change")
+    valid = np.isfinite(arr)
+    if is_change:
+        stops = [(200, 40, 40), (245, 245, 245), (0, 130, 60)]  # 减少→红, 无变化→白, 增加→绿
+        lo, hi = -0.5, 0.5
+    else:
+        stops = COLORMAPS.get(name.replace("_change", ""), COLORMAPS["ndvi"])
+        lo, hi = -1.0, 1.0
+    t = np.clip((arr - lo) / (hi - lo), 0, 1)
+    lo_t, hi_t = np.clip(t * 2, 0, 1), np.clip(t * 2 - 1, 0, 1)
+    rgb = np.zeros((3, *arr.shape), dtype="float32")
+    for c in range(3):
+        c01 = stops[0][c] + (stops[1][c] - stops[0][c]) * lo_t
+        c12 = stops[1][c] + (stops[2][c] - stops[1][c]) * hi_t
+        rgb[c] = np.where(valid, np.where(t <= 0.5, c01, c12), 0)
+
+    rgba = np.zeros((TILE, TILE, 4), dtype="uint8")
+    rgba[dy0:dy1, dx0:dx1, :3] = rgb.transpose(1, 2, 0).astype("uint8")
+    rgba[dy0:dy1, dx0:dx1, 3] = np.where(valid, 255, 0).astype("uint8")
+    buf = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
