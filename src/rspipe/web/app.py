@@ -423,6 +423,26 @@ def create_app() -> FastAPI:
         return {"display": h.get("display_name") or q, "geometry": geom, "area_km2": round(area)}
 
 
+
+    # ---------- 环境部署 / 服务控制 ----------
+    @app.get("/api/system/status")
+    def api_system_status() -> dict:
+        from rspipe.web.system import env_status
+
+        return env_status()
+
+    @app.post("/api/system/setup")
+    def api_system_setup() -> dict:
+        from rspipe.web.system import start_setup
+
+        return start_setup()
+
+    @app.post("/api/system/restart")
+    def api_system_restart() -> dict:
+        from rspipe.web.system import restart_service
+
+        return restart_service()
+
     # ---------- 影像分析（指数 / 变化） ----------
     @app.get("/api/analysis/scenes")
     def api_analysis_scenes() -> list[dict]:

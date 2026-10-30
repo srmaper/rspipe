@@ -27,6 +27,15 @@ Landsat / Sentinel-2 的**接入 → 归一化 → COG → 去云 → 匀色 →
 
 ## 快速开始
 
+### 0. 一键脚本（Windows，推荐新手）
+
+| 文件 | 作用 |
+|---|---|
+| `一键部署环境.bat` | 安装 Python 依赖（`pip install -e .[dev]`）+ 前端 `npm install` & `npm run build` |
+| `一键启动服务.bat` | 杀旧实例 → 启动服务（崩溃自动拉起）→ 自动打开 http://127.0.0.1:8000 |
+
+双击即可，无需命令行基础。
+
 ### 1. Web 平台（推荐）
 
 ```powershell
