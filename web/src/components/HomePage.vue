@@ -2,6 +2,7 @@
   <div class="home">
     <header class="top">
       <span class="brand"><i></i> rspipe 遥感影像平台</span>
+      <button class="contact" @click="contactOpen = true">联系作者</button>
     </header>
 
     <main class="cards">
@@ -21,11 +22,60 @@
     </main>
 
     <footer class="foot">数据源：earth-search（Sentinel-2）· planetary-computer（Landsat 8/9）</footer>
+
+    <div v-if="contactOpen" class="mask" @click.self="contactOpen = false">
+      <div class="dialog" role="dialog" aria-modal="true" aria-label="联系作者">
+        <h3>联系作者</h3>
+        <p class="tip">使用中遇到问题、有新的分析需求，欢迎微信联系</p>
+        <div class="wx">
+          <span class="label">微信</span>
+          <b class="num">{{ WECHAT }}</b>
+        </div>
+        <div class="acts">
+          <button class="ghost" @click="contactOpen = false">关闭</button>
+          <button class="primary" @click="copyWx">{{ copied ? '已复制' : '复制微信号' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+
 defineEmits(['go'])
+
+const WECHAT = '18734242374'
+const contactOpen = ref(false)
+const copied = ref(false)
+let copiedTimer = null
+
+async function copyWx() {
+  try {
+    await navigator.clipboard.writeText(WECHAT)
+  } catch {
+    const el = document.createElement('textarea')
+    el.value = WECHAT
+    el.style.position = 'fixed'
+    el.style.opacity = '0'
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+  }
+  copied.value = true
+  clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copied.value = false }, 1600)
+}
+
+function onKey(e) {
+  if (e.key === 'Escape') contactOpen.value = false
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  clearTimeout(copiedTimer)
+})
 </script>
 
 <style scoped>
@@ -63,6 +113,65 @@ defineEmits(['go'])
   display: inline-block;
 }
 .tag { color: rgba(226, 240, 255, .62); font-size: 12px; }
+.contact {
+  margin-left: auto;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #cfe9ff;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all .18s ease;
+}
+.contact:hover { color: #fff; border-color: rgba(56, 189, 248, .8); background: rgba(56, 189, 248, .18); }
+
+.mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 14, .58);
+  backdrop-filter: blur(3px);
+}
+.dialog {
+  width: 340px;
+  padding: 22px 22px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: linear-gradient(170deg, #ffffff, #f2f8ff);
+  box-shadow: 0 26px 60px rgba(2, 8, 20, .45), inset 0 1px 0 #fff;
+  color: #0f172a;
+}
+.dialog h3 { margin: 0 0 6px; font-size: 16px; color: #0f172a; letter-spacing: .4px; }
+.tip { margin: 0 0 16px; font-size: 12px; line-height: 1.7; color: rgba(15, 23, 42, .58); }
+.wx {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: #eef7ff;
+  border: 1px solid #bfe3fb;
+}
+.wx .label { font-size: 12px; color: #0284c7; }
+.wx .num { font-size: 18px; letter-spacing: 1.4px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.acts { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.acts button {
+  padding: 7px 16px;
+  font-size: 12.5px;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .18s ease;
+}
+.ghost { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+.ghost:hover { background: #e6edf5; color: #0f172a; }
+.primary { background: linear-gradient(135deg, #38bdf8, #22d3ee); color: #04121f; font-weight: 700; }
+.primary:hover { filter: brightness(1.08); }
 
 .cards {
   position: relative;

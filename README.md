@@ -1,7 +1,15 @@
-# rspipe — 遥感影像处理与预览平台
+# rspipe — 遥感影像一站式平台（检索 · 下载 · 分析）
 
-Landsat / Sentinel-2 的**接入 → 归一化 → COG → 去云 → 匀色 → 镶嵌 → STAC → 检索预览下载**全链路，
-含一个 Vue + MapLibre 的 Web 平台。
+**输入一个地名，或在地图上圈一块地，几秒内看到 Sentinel-2 / Landsat 影像；
+勾选需要的波段下载成可直接使用的数据产品；再在同一个网页里算植被指数、做两期变化对比。**
+
+不需要注册账号，不需要云平台额度，不需要安装 ArcGIS/QGIS —— 数据源是公开的
+[earth-search](https://earth-search.aws.element84.com/v1)（Sentinel-2 L2A）与
+[Planetary Computer](https://planetarycomputer.microsoft.com/)（Landsat 8/9 L2），
+后端只按 AOI 读取 COG 的瓦片窗口，**不下载整景**。
+
+同时它也是一条完整的离线处理链：接入 → 归一化 → COG → 去云 → 匀色 → 镶嵌 → STAC → 检索/预览/下载，
+可用命令行批量跑城市级数据。
 
 | 能力 | 模块 |
 |---|---|
@@ -9,7 +17,30 @@ Landsat / Sentinel-2 的**接入 → 归一化 → COG → 去云 → 匀色 →
 | 去云、匀色、无缝镶嵌、STAC | `process` `stac` |
 | 定时增量更新 | `pipeline`（水位线 + cron） |
 | 选景质量评估（AOI 实测云量 / Tier） | `quality.py` |
-| 检索 / 预览 / 下载 Web 平台 | `web/` + `web/`（前端） |
+| Web 平台 | `src/rspipe/web/`（FastAPI 后端）+ `web/`（Vue3 前端） |
+
+## 核心特性
+
+| 模块 | 说明 |
+|---|---|
+| **AOI 圈选** | 矩形 / 多边形 / 地名搜索（geoscope，Nominatim 兜底），面积实时显示，上限 500 km² 防误操作 |
+| **智能选景** | 不用整景云量，而是按 AOI 内实测云量 + 覆盖率 + Tier 排序，真正"看得见"的景排前面 |
+| **波段级下载** | 按需勾选波段（10/20/60 m 各自分辨率），弹窗预估体积与耗时；断点续传、分块并发、失败重试 |
+| **瓦片预览** | 后端按墨卡托几何求交渲染 256 瓦片，按景缓存 2%–98% 拉伸，拼接无花斑；真彩 / 假彩 / NDVI |
+| **产品化输出** | 一键导出 zip：`preview_4326.tif` + `composite.tif`(uint16) + `aoi.geojson` + `quicklook.png` + `README.txt` + `raw/` + STAC json |
+| **指数分析** | NDVI / NDWI / NDBI / NBR / BSI / NDRE，阈值分类与面积统计 |
+| **变化检测** | 任选两期同一指数差值，输出变化面积（减少/增加），支持双屏滑动对比 |
+| **任务中心** | 同景去重 + 每景锁 + sqlite 持久化，重启后中断任务可续传（已完成波段跳过） |
+| **一键运行** | Windows 双击 `一键部署环境.bat` + `一键启动服务.bat` 即可，自带崩溃自动拉起 |
+
+## 技术栈
+
+| 层 | 选型 |
+|---|---|
+| 后端 | Python 3.11+ / FastAPI / rasterio / numpy / pydantic |
+| 前端 | Vue 3 + Vite + MapLibre GL（自绘底图、比例尺、坐标条） |
+| 数据 | STAC API 检索 · COG 窗口读取 · SQLite 索引 · uint16 GeoTIFF |
+| 质量 | pytest（90 项，无需联网）+ ruff |
 
 ---
 
@@ -61,10 +92,10 @@ scripts\web_server.cmd   # 杀旧实例并启动，监听 8000（崩溃自动拉
 |---|---|
 | `#/` | 首页（下载影像 / 数据分析 两个入口） |
 | `#/download` | 检索 · AOI 圈选 · 选波段下载 · 真彩/假彩/NDVI 预览 · 导出 zip |
+| `#/analysis` | 指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比 |
 
 > 单次下载 AOI 面积上限 **500 km²**（约 22 km × 22 km），超限会在页面中央提示并阻止提交；
 > 更大范围请分块下载后用 `rspipe mosaic` 镶嵌。
-| `#/analysis` | 指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比 |
 
 > 仓库不含 `data/`（下载与计算产物，运行时生成，见 `data/README.md`）。
 
@@ -229,3 +260,12 @@ docs/             设计与问题记录
 - `docs/web项目设计.md` — Web 平台架构与分期
 - `docs/应用能力介绍.md` — 能做哪些应用（城市/农业/林业/水环境/灾害/执法等）、方法、产出与能力边界
 - `docs/开发问题与经验.md` — 踩坑清单与规避方法
+
+## 许可证
+
+[MIT](LICENSE)。影像数据版权归各数据源所有（Sentinel-2 属 ESA/Copernicus，Landsat 属 USGS/NASA），
+使用与署名请遵循其开放许可。
+
+## 联系
+
+使用中遇到问题、有新的分析需求，欢迎微信联系：**18734242374**（首页右上角「联系作者」亦可查看）。
