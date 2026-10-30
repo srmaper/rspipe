@@ -2,7 +2,6 @@
   <div class="home">
     <header class="top">
       <span class="brand"><i></i> rspipe 遥感影像平台</span>
-      <span class="tag">Landsat / Sentinel-2 · 检索 · 预览 · 下载 · 应用</span>
     </header>
 
     <main class="cards">
