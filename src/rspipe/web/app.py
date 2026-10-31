@@ -567,6 +567,19 @@ def create_app() -> FastAPI:
             return res
         res["classify"] = classify_stats(Path(cfg.data_root), provider, scene_id, index, threshold)
         res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png"
+        from rspipe.web.analysis import record_run
+
+        record_run(
+            Path(cfg.data_root),
+            scene_id,
+            {
+                "mode": "single",
+                "index": index,
+                "threshold": threshold,
+                "provider": provider,
+                "scene_a": scene_id,
+            },
+        )
         return res
 
     @app.post("/api/analysis/change")
@@ -586,7 +599,28 @@ def create_app() -> FastAPI:
         res = compute_change(Path(cfg.data_root), provider, a, b, coll, index, threshold)
         if res.get("ok"):
             res["tiles"] = f"/api/analysis/tiles/{res['key']}/{index}_change/{{z}}/{{x}}/{{y}}.png"
+            from rspipe.web.analysis import record_run
+
+            record_run(
+                Path(cfg.data_root),
+                str(res["key"]),
+                {
+                    "mode": "change",
+                    "index": index,
+                    "threshold": threshold,
+                    "provider": provider,
+                    "scene_a": a,
+                    "scene_b": b,
+                },
+            )
         return res
+
+    @app.get("/api/analysis/history")
+    def api_analysis_history() -> dict:
+        """历史分析列表（按时间倒序）。"""
+        from rspipe.web.analysis import list_history
+
+        return {"items": list_history(Path(cfg.data_root))}
 
     @app.get("/api/analysis/export/{key}")
     def api_analysis_export(key: str):

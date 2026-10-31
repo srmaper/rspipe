@@ -64,11 +64,6 @@
               {{ running ? '计算中…' : '开始计算' }}
             </button>
           </div>
-          <div class="row" v-if="mode === 'change'">
-            <button id="tour-swipe" :disabled="!canRun || comparing" @click="openSwipe">
-              {{ comparing ? '准备中…' : '双屏对比' }}
-            </button>
-          </div>
           <div v-if="error" class="warn">{{ error }}</div>
         </div>
 
@@ -90,6 +85,9 @@
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
           <button :class="{ primary: resultVisible }" @click="toggleResult">结果</button>
+          <button v-if="mode === 'change'" :disabled="comparing" @click="openSwipe">
+            {{ comparing ? "准备中…" : "双屏" }}
+          </button>
           <button :class="{ primary: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
             {{ vectorBusy ? "生成中…" : "矢量" }}
           </button>
@@ -109,7 +107,32 @@
             </table>
           </div>
           <div v-if="stats" class="row" style="margin-top:10px">
-            <button class="primary" style="width:100%" @click="downloadResult">下载</button>
+            <button class="primary" style="width:100%" @click="downloadResult()">下载</button>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <h3>历史分析</h3>
+          <div class="reslist">
+            <div v-if="!history.length" class="hint">还没有分析记录，算一次就会出现在这里。</div>
+            <div
+              v-for="h in history"
+              :key="h.key + h.index"
+              class="hist"
+              :class="{ active: preview && preview.scene_id === h.key }"
+            >
+              <div class="hrow" @click="loadHistory(h)">
+                <span class="grow hname">
+                  {{ h.mode === 'change' ? h.scene_a + ' ↔ ' + h.scene_b : h.scene_a }}
+                </span>
+                <span class="badge">{{ h.index.toUpperCase() }}</span>
+              </div>
+              <div class="hint">{{ histLine(h) }} · {{ fmtTime(h.created) }}</div>
+              <div class="row" style="margin-top:6px">
+                <button @click="loadHistory(h)">加载</button>
+                <button @click="downloadResult(h.key)">下载</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -201,6 +224,7 @@ function logLn(s) {
 }
 const swipe = ref(null)
 const extentVisible = ref(false)   // 与 MapCanvas 的默认值一致：范围框默认关
+const history = ref([])
 const vectorOn = ref(false)
 const vectorBusy = ref(false)
 const vectorKey = ref('')
@@ -366,6 +390,7 @@ async function run() {
     logLn(error.value)
   } finally {
     running.value = false
+    loadHistoryList()
   }
 }
 
@@ -446,8 +471,48 @@ async function toggleVector() {
   }
   await loadVector()
 }
-function downloadResult() {
-  const key = preview.value?.scene_id
+function fmtTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts * 1000)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+async function loadHistoryList() {
+  try {
+    const r = await fetch('/api/analysis/history')
+    history.value = (await r.json()).items || []
+  } catch { history.value = [] }
+}
+function histLine(h) {
+  const s = h.stats || {}
+  const thr = h.threshold ?? s.threshold ?? '-'
+  if (h.mode === 'change' || String(h.index).endsWith('_change')) {
+    return `减少 ${s.decrease_km2 ?? '-'} / 增加 ${s.increase_km2 ?? '-'} km² · 阈值 ${thr}`
+  }
+  return `均值 ${s.mean ?? '-'} · 面积 ${s.area_km2 ?? '-'} km² · 阈值 ${thr}`
+}
+function loadHistory(h) {
+  const isChange = h.mode === 'change' || String(h.index).endsWith('_change')
+  const base = String(h.index).replace(/_change$/, '')
+  const name = isChange ? `${base}_change` : base
+  index.value = base
+  const thr = h.threshold ?? (h.stats || {}).threshold
+  if (thr !== null && thr !== undefined) threshold.value = thr
+  stats.value = { ...(h.stats || {}) }
+  tileTemplate.value = `/api/analysis/tiles/${h.key}/${name}/{z}/{x}/{y}.png`
+  const bounds = h.stats?.bounds
+  preview.value = { scene_id: h.key, ready: true, bounds }
+  if (bounds) {
+    mapRef.value?.setPreviewTiles(h.key, 'rgb', '', '', bounds)
+    mapRef.value?.fitBbox(bounds)
+  }
+  vectorKey.value = h.key
+  vectorName.value = name
+  vectorOp.value = isChange ? 'abs' : 'above'
+  if (vectorOn.value) loadVector()
+  logLn(`载入历史分析 ${h.key}`)
+}
+function downloadResult(keyArg) {
+  const key = typeof keyArg === 'string' ? keyArg : preview.value?.scene_id
   if (!key) return
   const a = document.createElement('a')
   a.href = `/api/analysis/export/${encodeURIComponent(key)}`
@@ -485,6 +550,7 @@ onMounted(async () => {
   await loadMeta()
   applyDefaultThreshold()
   loadScenes()
+  loadHistoryList()
 })
 </script>
 
@@ -508,6 +574,14 @@ onMounted(async () => {
   padding: 8px 10px; border-radius: 10px; white-space: pre-wrap;
 }
 .guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
+.hist {
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 10px; margin-bottom: 8px; background: var(--panel);
+}
+.hist.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.hrow { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.hname { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist .badge { font-size: 10.5px; }
 .seg { display: flex; gap: 6px; margin-top: 2px; }
 .seg button { flex: 1; }
 .row { margin-top: 10px; }

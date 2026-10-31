@@ -484,6 +484,63 @@ def vectorize_index(
     }
 
 
+def record_run(data_root: Path, key: str, payload: dict) -> None:
+    """把本次分析的参数（模式/指数/阈值/两期景）记到 run.json，供历史列表使用。"""
+    d = Path(data_root) / "analysis" / key
+    if not d.is_dir():
+        return
+    payload = dict(payload)
+    payload.setdefault("created", __import__("time").time())
+    (d / "run.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def list_history(data_root: Path, limit: int = 50) -> list[dict]:
+    """扫描 data/analysis/*，返回按时间倒序的分析历史。"""
+    base = Path(data_root) / "analysis"
+    if not base.is_dir():
+        return []
+    dirs = [d for d in base.iterdir() if d.is_dir()]
+    dirs.sort(key=lambda d: -d.stat().st_mtime)
+
+    out: list[dict] = []
+    for d in dirs[: max(1, limit)]:
+        run: dict = {}
+        rp = d / "run.json"
+        if rp.exists():
+            try:
+                run = json.loads(rp.read_text(encoding="utf-8"))
+            except Exception:
+                run = {}
+        idx = str(run.get("index") or "")
+        if not idx:
+            tifs = sorted(d.glob("*.tif"))
+            idx = tifs[0].stem if tifs else ""
+        if not idx:
+            continue
+        stats: dict = {}
+        sp = d / f"{idx}.json"
+        if sp.exists():
+            try:
+                stats = json.loads(sp.read_text(encoding="utf-8"))
+            except Exception:
+                stats = {}
+        parts = d.name.split("__")
+        out.append(
+            {
+                "key": d.name,
+                "index": idx,
+                "mode": run.get("mode", "change" if "__" in d.name else "single"),
+                "threshold": run.get("threshold"),
+                "provider": run.get("provider"),
+                "scene_a": run.get("scene_a") or parts[0],
+                "scene_b": run.get("scene_b") or (parts[1] if len(parts) > 1 else None),
+                "created": run.get("created") or d.stat().st_mtime,
+                "stats": stats,
+            }
+        )
+    return out
+
+
 def _quicklook_png(tif: Path, *, max_size: int = 1024) -> bytes | None:
     """把指数栅格渲染成小尺寸 PNG（同一套色带与固定区间）。"""
     import io
