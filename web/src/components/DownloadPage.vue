@@ -515,6 +515,7 @@ defineEmits(['home'])
   border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);
 }
 #right { width: 330px; flex: none; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+#tour-tasks { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .scenelist { flex: 1; min-height: 0; overflow: auto; }
 .group { margin-bottom: 12px; }
 .group-title { font-size: 12px; font-weight: 600; margin: 8px 0 6px; color: var(--accent); }
