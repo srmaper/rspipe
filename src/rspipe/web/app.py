@@ -514,6 +514,13 @@ def create_app() -> FastAPI:
         return restart_service()
 
     # ---------- 影像分析（指数 / 变化） ----------
+    @app.get("/api/analysis/meta")
+    def api_analysis_meta() -> dict:
+        """各指数的推荐阈值与伪彩区间（前端滑块/图例用）。"""
+        from rspipe.web.analysis import INDEX_META
+
+        return {"indices": INDEX_META}
+
     @app.get("/api/analysis/scenes")
     def api_analysis_scenes() -> list[dict]:
         root = Path(cfg.data_root)

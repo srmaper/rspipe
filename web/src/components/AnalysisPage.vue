@@ -46,8 +46,17 @@
             缺少波段：{{ missingBands.join(', ') }}
           </div>
 
-          <label>{{ mode === 'change' ? '变化阈值：' + threshold : '分类阈值：' + threshold }}</label>
-          <input type="range" min="-0.8" max="0.8" step="0.05" v-model.number="threshold" />
+          <label>
+            {{ mode === 'change' ? '变化阈值' : '分类阈值' }}：{{ threshold }}
+            <span class="muted" v-if="curMeta.label">（{{ curMeta.label }}）</span>
+          </label>
+          <input
+            type="range"
+            :min="sliderRange[0]"
+            :max="sliderRange[1]"
+            :step="sliderRange[2]"
+            v-model.number="threshold"
+          />
 
           <div class="row">
             <button class="primary" id="tour-run" :disabled="!canRun || running" @click="run">
@@ -115,7 +124,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import MapCanvas from './MapCanvas.vue'
 import GuideModal from './GuideModal.vue'
 import SwipeCompare from './SwipeCompare.vue'
@@ -188,6 +197,7 @@ const sceneA = ref('')
 const sceneB = ref('')
 const index = ref('ndvi')
 const threshold = ref(0.3)
+const meta = ref({})
 const running = ref(false)
 const error = ref('')
 const stats = ref(null)
@@ -195,6 +205,16 @@ const preview = ref(null)
 const tileTemplate = ref('')
 const mapRef = ref(null)
 
+const curMeta = computed(() => meta.value[index.value] || {})
+const sliderRange = computed(() => {
+  const m = curMeta.value
+  if (mode.value === 'change') {
+    const t = m.change_threshold ?? 0.1
+    return [0, Math.max(0.5, t * 3), 0.01]
+  }
+  const s = m.slider
+  return Array.isArray(s) ? s : [-0.8, 0.8, 0.05]
+})
 const current = computed(() => scenes.value.find((s) => s.scene_id === sceneA.value) || null)
 const availableIndices = computed(() => {
   const bands = new Set(current.value?.bands || [])
@@ -243,12 +263,22 @@ const legendCss = computed(() => {
   const stops = mode.value === 'change' ? ['#c82828', '#f5f5f5', '#00823c'] : c
   return `linear-gradient(90deg, ${stops.join(',')})`
 })
-const legendLow = computed(() => (mode.value === 'change' ? '减少' : '低'))
-const legendHigh = computed(() => (mode.value === 'change' ? '增加' : '高'))
-const legendNote = computed(() =>
-  mode.value === 'change'
-    ? `白=变化小于阈值 ±${threshold.value}；红=植被/指标下降；绿=上升`
-    : `${index.value.toUpperCase()}：${INDICES.find((i) => i.name === index.value)?.desc || ''}`)
+const legendLow = computed(() =>
+  mode.value === 'change' ? '减少' : curMeta.value.low || '低',
+)
+const legendHigh = computed(() =>
+  mode.value === 'change' ? '增加' : curMeta.value.high || '高',
+)
+const legendNote = computed(() => {
+  const m = curMeta.value
+  if (mode.value === 'change') {
+    return `白=变化小于阈值 ±${threshold.value}；红=植被/指标下降；绿=上升`
+  }
+  const desc = INDICES.find((i) => i.name === index.value)?.desc || ''
+  const range = m.vmin !== undefined ? `色带区间 ${m.vmin}~${m.vmax}` : ''
+  const hit = m.label ? `>${threshold.value} 判为「${m.high}」` : ''
+  return [index.value.toUpperCase(), desc, range, hit].filter(Boolean).join(' · ')
+})
 
 async function loadScenes() {
   try {
@@ -369,7 +399,25 @@ function statsBounds() {
   return s?.bounds || null
 }
 
-onMounted(loadScenes)
+async function loadMeta() {
+  try {
+    const r = await fetch('/api/analysis/meta')
+    const j = await r.json()
+    meta.value = j.indices || {}
+  } catch { /* 保留默认 */ }
+}
+function applyDefaultThreshold() {
+  const m = meta.value[index.value] || {}
+  const v = mode.value === 'change' ? m.change_threshold : m.threshold
+  if (typeof v === 'number') threshold.value = v
+}
+watch(index, applyDefaultThreshold)
+watch(mode, applyDefaultThreshold)
+onMounted(async () => {
+  await loadMeta()
+  applyDefaultThreshold()
+  loadScenes()
+})
 </script>
 
 <style scoped>

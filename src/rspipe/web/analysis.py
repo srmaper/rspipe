@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -30,6 +31,86 @@ COLORMAPS = {
     "nbr": [(40, 40, 40), (250, 200, 40), (0, 110, 60)],
     "bsi": [(240, 240, 240), (190, 170, 140), (110, 80, 50)],
     "ndre": [(139, 110, 80), (235, 220, 120), (0, 130, 60)],
+}
+
+# 每个指数的推荐阈值与显示区间（不同指数的取值范围差别很大，不能共用一个）
+#   threshold        : 单期分类阈值（大于它算"命中"，如植被/水体/建成区）
+#   slider           : (min, max, step)
+#   vmin/vmax        : 伪彩映射的数值区间（固定，不按瓦片拉伸，避免拼接色差）
+#   change_*         : 两期变化的阈值与色带区间
+INDEX_META = {
+    "ndvi": {
+        "label": "植被指数",
+        "threshold": 0.30,
+        "slider": (-0.2, 0.9, 0.05),
+        "vmin": -0.2,
+        "vmax": 0.9,
+        "low": "裸土 / 水体",
+        "high": "浓密植被",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "ndwi": {
+        "label": "水体指数",
+        "threshold": 0.10,
+        "slider": (-0.5, 0.6, 0.05),
+        "vmin": -0.4,
+        "vmax": 0.6,
+        "low": "陆地",
+        "high": "水体",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "ndbi": {
+        "label": "建筑指数",
+        "threshold": 0.05,
+        "slider": (-0.5, 0.5, 0.05),
+        "vmin": -0.4,
+        "vmax": 0.4,
+        "low": "植被 / 水体",
+        "high": "建成区",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
+    "nbr": {
+        "label": "燃烧指数",
+        "threshold": 0.30,
+        "slider": (-0.5, 0.9, 0.05),
+        "vmin": -0.2,
+        "vmax": 0.9,
+        "low": "火烧 / 裸地",
+        "high": "健康植被",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "bsi": {
+        "label": "裸土指数",
+        "threshold": 0.10,
+        "slider": (-0.5, 0.5, 0.05),
+        "vmin": -0.4,
+        "vmax": 0.5,
+        "low": "植被 / 水体",
+        "high": "裸土",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
+    "ndre": {
+        "label": "红边叶绿素",
+        "threshold": 0.20,
+        "slider": (-0.2, 0.7, 0.05),
+        "vmin": -0.1,
+        "vmax": 0.6,
+        "low": "弱长势",
+        "high": "强长势",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
 }
 
 BAND_ALIASES = {
@@ -355,13 +436,15 @@ def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: i
         ).astype("float32")
 
     is_change = name.endswith("_change")
+    base = name.replace("_change", "")
+    meta: dict[str, Any] = INDEX_META.get(base, {})
     valid = np.isfinite(arr)
     if is_change:
         stops = [(200, 40, 40), (245, 245, 245), (0, 130, 60)]  # 减少→红, 无变化→白, 增加→绿
-        lo, hi = -0.5, 0.5
+        lo, hi = meta.get("change_vmin", -0.5), meta.get("change_vmax", 0.5)
     else:
-        stops = COLORMAPS.get(name.replace("_change", ""), COLORMAPS["ndvi"])
-        lo, hi = -1.0, 1.0
+        stops = COLORMAPS.get(base, COLORMAPS["ndvi"])
+        lo, hi = meta.get("vmin", -1.0), meta.get("vmax", 1.0)
     t = np.clip((arr - lo) / (hi - lo), 0, 1)
     lo_t, hi_t = np.clip(t * 2, 0, 1), np.clip(t * 2 - 1, 0, 1)
     rgb = np.zeros((3, *arr.shape), dtype="float32")
