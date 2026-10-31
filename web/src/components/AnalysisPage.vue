@@ -90,6 +90,9 @@
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
           <button :class="{ primary: resultVisible }" @click="toggleResult">结果</button>
+          <button :class="{ primary: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
+            {{ vectorBusy ? "生成中…" : "矢量" }}
+          </button>
           <button :class="{ primary: extentVisible }" @click="toggleExtent">范围</button>
         </div>
         <div class="badge" v-if="preview">{{ preview.scene_id }}</div>
@@ -97,13 +100,18 @@
 
       <!-- 右栏 -->
       <div id="right">
-        <div class="card" id="tour-result" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div class="card" id="tour-result" style="flex:none;display:flex;flex-direction:column">
           <h3>分析结果</h3>
           <div class="reslist">
             <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
             <table v-else class="kv">
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
+          </div>
+          <div v-if="stats" class="row" style="margin-top:10px">
+            <button class="primary" style="width:100%" @click="downloadResult">
+              下载分析结果（zip）
+            </button>
           </div>
         </div>
       </div>
@@ -195,6 +203,11 @@ function logLn(s) {
 }
 const swipe = ref(null)
 const extentVisible = ref(false)   // 与 MapCanvas 的默认值一致：范围框默认关
+const vectorOn = ref(false)
+const vectorBusy = ref(false)
+const vectorKey = ref('')
+const vectorName = ref('ndvi')
+const vectorOp = ref('above')
 const mode = ref('single')
 const scenes = ref([])
 const sceneA = ref('')
@@ -324,6 +337,10 @@ async function run() {
       }
       mapRef.value?.setPreviewTiles(sceneA.value, 'rgb', '', '', j.stats.bounds)
       mapRef.value?.fitBbox(j.stats.bounds)
+      vectorKey.value = sceneA.value
+      vectorName.value = index.value
+      vectorOp.value = 'above'
+      if (vectorOn.value) loadVector()
     } else {
       const r = await fetch('/api/analysis/change', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -341,6 +358,10 @@ async function run() {
       preview.value = { scene_id: j.key, ready: true, bounds }
       mapRef.value?.setPreviewTiles(j.key, 'rgb', '', '', bounds)
       if (bounds) mapRef.value?.fitBbox(bounds)
+      vectorKey.value = j.key
+      vectorName.value = index.value + '_change'
+      vectorOp.value = 'abs'
+      if (vectorOn.value) loadVector()
     }
   } catch (e) {
     error.value = '请求失败：' + (e.message || e)
@@ -394,6 +415,50 @@ function toggleResult() {
   else mapRef.value?.clearPreview()
 }
 
+async function loadVector() {
+  if (!vectorKey.value) return
+  vectorBusy.value = true
+  try {
+    const r = await fetch('/api/analysis/vectorize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: vectorKey.value,
+        name: vectorName.value,
+        threshold: threshold.value,
+        op: vectorOp.value,
+      }),
+    })
+    const gj = await r.json()
+    const n = (gj.features || []).length
+    mapRef.value?.setResultVector(gj)
+    mapRef.value?.setVectorVisible(true)
+    logLn(n ? `矢量结果 ${n} 个面` : '矢量结果为空（当前阈值下没有像元）')
+  } catch (e) {
+    logLn('矢量生成失败: ' + e)
+  } finally {
+    vectorBusy.value = false
+  }
+}
+async function toggleVector() {
+  if (!preview.value) return
+  vectorOn.value = !vectorOn.value
+  if (!vectorOn.value) {
+    mapRef.value?.setVectorVisible(false)
+    return
+  }
+  await loadVector()
+}
+function downloadResult() {
+  const key = preview.value?.scene_id
+  if (!key) return
+  const a = document.createElement('a')
+  a.href = `/api/analysis/export/${encodeURIComponent(key)}`
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  logLn(`导出分析结果 ${key}.zip`)
+}
 function toggleExtent() {
   extentVisible.value = !extentVisible.value
   mapRef.value?.setExtentVisible(extentVisible.value)

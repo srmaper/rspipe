@@ -211,6 +211,41 @@ function setAoiPolygon(geom) {
     map.getSource('aoi').setData(data)
   }
 }
+// ── 分析结果矢量图层（阈值二值化后的面） ──
+let vectorVisible = true
+function clearResultVector() {
+  if (!map) return
+  try { if (map.getLayer('rvec-fill')) map.removeLayer('rvec-fill') } catch (e) {}
+  try { if (map.getLayer('rvec-line')) map.removeLayer('rvec-line') } catch (e) {}
+  try { if (map.getSource('rvec')) map.removeSource('rvec') } catch (e) {}
+}
+function setResultVector(geojson) {
+  if (!map) return
+  clearResultVector()
+  const feats = (geojson && geojson.features) || []
+  if (!feats.length) return
+  map.addSource('rvec', { type: 'geojson', data: geojson })
+  map.addLayer({
+    id: 'rvec-fill', type: 'fill', source: 'rvec',
+    paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.25 },
+  })
+  map.addLayer({
+    id: 'rvec-line', type: 'line', source: 'rvec',
+    paint: { 'line-color': '#b45309', 'line-width': 1 },
+  })
+  try { map.setLayoutProperty('rvec-fill', 'visibility', vectorVisible ? 'visible' : 'none') } catch (e) {}
+  try { map.setLayoutProperty('rvec-line', 'visibility', vectorVisible ? 'visible' : 'none') } catch (e) {}
+  restackBusinessLayers(map)
+}
+function setVectorVisible(visible) {
+  vectorVisible = visible
+  try {
+    if (map.getLayer('rvec-fill')) map.setLayoutProperty('rvec-fill', 'visibility', visible ? 'visible' : 'none')
+    if (map.getLayer('rvec-line')) map.setLayoutProperty('rvec-line', 'visibility', visible ? 'visible' : 'none')
+  } catch (e) {}
+  restackBusinessLayers(map)
+}
+
 // ── 选中景的真实 footprint（蓝色）：切换选择时先销毁旧图层，避免叠加 ──
 function clearSelectedFootprint() {
   if (!map) return
@@ -302,7 +337,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['preview', 'pext-line', 'selfp-fill', 'selfp-line', 'aoi-line']
+  const top = ['preview', 'pext-line', 'rvec-fill', 'rvec-line', 'selfp-fill', 'selfp-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
@@ -338,7 +373,7 @@ function viewportBbox() {
 }
 
 defineExpose({
-  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, clearPreview, setBasemap, setDrawMode, viewportBbox,
+  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, setResultVector, setVectorVisible, clearPreview, setBasemap, setDrawMode, viewportBbox,
 })
 </script>
 

@@ -407,6 +407,155 @@ def compute_change(
     return {"ok": True, "key": key, "stats": stats}
 
 
+def vectorize_index(
+    data_root: Path,
+    key: str,
+    name: str,
+    threshold: float,
+    *,
+    op: str = "above",
+    min_pixels: int = 4,
+    max_features: int = 3000,
+    simplify_px: float = 1.0,
+) -> dict:
+    """按阈值二值化后转矢量（GeoJSON，EPSG:4326）。
+
+    op="above" : index > threshold（植被/水体/建成区等）
+    op="abs"   : |value| > threshold（两期变化的增减区域）
+
+    返回的是"面"图层：丢掉小于 min_pixels 个像元的碎斑，按面积从大到小最多保留
+    max_features 个，几何按 simplify_px 个像元抽稀，保证前端能流畅渲染。
+    """
+    import math
+
+    import rasterio
+    from rasterio import features
+    from shapely.geometry import mapping, shape
+
+    f = Path(data_root) / "analysis" / key / f"{name}.tif"
+    if not f.exists():
+        return {"type": "FeatureCollection", "features": [], "count": 0}
+
+    with rasterio.open(f) as src:
+        a = src.read(1)
+        transform = src.transform
+
+    valid = np.isfinite(a)
+    mask = (np.abs(a) > threshold) if op == "abs" else (a > threshold)
+    mask &= valid
+    if not mask.any():
+        return {"type": "FeatureCollection", "features": [], "count": 0}
+
+    px_deg = abs(transform.a * transform.e)
+    min_area = px_deg * max(1, min_pixels)
+    tol = abs(transform.a) * max(0.0, simplify_px)
+    lat_mid = math.radians((transform.f + transform.e * a.shape[0] / 2) if transform.e else 0.0)
+    km2_per_deg2 = 111.32 * 110.54 * math.cos(lat_mid)
+
+    polys = []
+    for geom, val in features.shapes(
+        mask.astype("uint8"), mask=mask, transform=transform, connectivity=4
+    ):
+        if not val:
+            continue
+        sh = shape(geom)
+        if sh.is_empty or sh.area < min_area:
+            continue
+        if tol > 0:
+            sh = sh.simplify(tol, preserve_topology=True)
+            if sh.is_empty:
+                continue
+        polys.append((sh.area, sh))
+
+    polys.sort(key=lambda x: -x[0])
+    feats = [
+        {
+            "type": "Feature",
+            "geometry": mapping(sh),
+            "properties": {"area_km2": round(area * km2_per_deg2, 3)},
+        }
+        for area, sh in polys[:max_features]
+    ]
+    return {
+        "type": "FeatureCollection",
+        "features": feats,
+        "count": len(polys),
+        "truncated": len(polys) > max_features,
+    }
+
+
+def _quicklook_png(tif: Path, *, max_size: int = 1024) -> bytes | None:
+    """把指数栅格渲染成小尺寸 PNG（同一套色带与固定区间）。"""
+    import io
+
+    import rasterio
+    from PIL import Image
+
+    try:
+        with rasterio.open(tif) as src:
+            scale = max(1, int(max(src.width, src.height) / max_size))
+            w = max(1, src.width // scale)
+            h = max(1, src.height // scale)
+            arr = src.read(1, out_shape=(h, w)).astype("float32")
+    except Exception:
+        return None
+
+    base = tif.stem.replace("_change", "")
+    meta: dict[str, Any] = INDEX_META.get(base, {})
+    stops = COLORMAPS.get(base, COLORMAPS["ndvi"])
+    if tif.stem.endswith("_change"):
+        stops = [(200, 40, 40), (245, 245, 245), (0, 130, 60)]
+        lo, hi = float(meta.get("change_vmin", -0.5)), float(meta.get("change_vmax", 0.5))
+    else:
+        lo, hi = float(meta.get("vmin", -1.0)), float(meta.get("vmax", 1.0))
+
+    valid = np.isfinite(arr)
+    tt = np.clip((np.nan_to_num(arr, nan=lo) - lo) / (hi - lo), 0, 1)
+    lo_t, hi_t = np.clip(tt * 2, 0, 1), np.clip(tt * 2 - 1, 0, 1)
+    rgba = np.zeros((h, w, 4), dtype="uint8")
+    for c in range(3):
+        c01 = stops[0][c] + (stops[1][c] - stops[0][c]) * lo_t
+        c12 = stops[1][c] + (stops[2][c] - stops[1][c]) * hi_t
+        rgba[..., c] = np.where(valid, np.where(tt <= 0.5, c01, c12), 0).astype("uint8")
+    rgba[..., 3] = np.where(valid, 255, 0).astype("uint8")
+    buf = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def export_bundle(data_root: Path, key: str, out_zip: Path) -> Path:
+    """把一整套分析结果（栅格 + 统计 json + 快视图 + 说明）打成 zip。"""
+    import zipfile
+
+    src_dir = Path(data_root) / "analysis" / key
+    if not src_dir.is_dir():
+        raise FileNotFoundError(f"analysis dir not found: {src_dir}")
+
+    out_zip.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(src_dir.iterdir()):
+            if not f.is_file():
+                continue
+            zf.write(f, f.name)
+            if f.suffix.lower() in (".tif", ".tiff"):
+                png = _quicklook_png(f)
+                if png:
+                    zf.writestr(f"{f.stem}_quicklook.png", png)
+        readme = (
+            "分析结果包\n"
+            "==========\n\n"
+            f"来源：{key}\n\n"
+            "内容：\n"
+            "  *.tif               指数/变化栅格（EPSG:4326，float32，nodata=NaN）\n"
+            "  *.json              统计结果（均值/中位数/P10/P90/面积等）\n"
+            "  *_quicklook.png     伪彩快视图（与网页同一套色带与区间）\n\n"
+            "读取示例：\n"
+            "  python -c \"import rasterio; s=rasterio.open('ndvi.tif'); print(s.bounds, s.crs)\"\n"
+        )
+        zf.writestr("README.txt", readme)
+    return out_zip
+
+
 def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: int) -> bytes | None:
     """指数/变化栅格 → 伪彩瓦片。"""
     import io

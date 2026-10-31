@@ -588,6 +588,42 @@ def create_app() -> FastAPI:
             res["tiles"] = f"/api/analysis/tiles/{res['key']}/{index}_change/{{z}}/{{x}}/{{y}}.png"
         return res
 
+    @app.get("/api/analysis/export/{key}")
+    def api_analysis_export(key: str):
+        """下载整套分析结果（zip：栅格 + 统计 json + 快视图 + README）。"""
+        from fastapi.responses import FileResponse
+
+        from rspipe.web.analysis import export_bundle
+
+        safe = "".join(ch for ch in key if ch.isalnum() or ch in "._-")
+        if not safe or safe != key:
+            raise HTTPException(422, "非法的分析结果标识")
+        out = Path(cfg.data_root) / "web_export" / f"analysis_{safe}.zip"
+        src = Path(cfg.data_root) / "analysis" / safe
+        if not src.is_dir():
+            raise HTTPException(404, f"没有该分析结果：{safe}")
+        try:
+            export_bundle(Path(cfg.data_root), safe, out)
+        except Exception as exc:
+            raise HTTPException(500, f"打包失败：{exc}") from exc
+        return FileResponse(out, media_type="application/zip", filename=f"{safe}.zip")
+
+    @app.post("/api/analysis/vectorize")
+    def api_analysis_vectorize(body: dict) -> dict:
+        """按阈值二值化后转矢量（GeoJSON），供地图矢量图层使用。"""
+        from rspipe.web.analysis import vectorize_index
+
+        key = str(body.get("key") or "")
+        name = str(body.get("name") or body.get("index") or "ndvi")
+        if not key:
+            raise HTTPException(422, "缺少 key（影像/变化组）")
+        try:
+            threshold = float(body.get("threshold", 0.3))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, f"threshold 非法：{exc}") from exc
+        op = "abs" if str(body.get("op") or "above") == "abs" else "above"
+        return vectorize_index(Path(cfg.data_root), key, name, threshold, op=op)
+
     @app.get("/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png")
     def api_analysis_tile(key: str, name: str, z: int, x: int, y: int):
         from rspipe.web.analysis import render_index_tile
