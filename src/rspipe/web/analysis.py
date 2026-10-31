@@ -476,12 +476,23 @@ def vectorize_index(
         }
         for area, sh in polys[:max_features]
     ]
-    return {
+    out = {
         "type": "FeatureCollection",
         "features": feats,
         "count": len(polys),
         "truncated": len(polys) > max_features,
+        "threshold": threshold,
+        "op": op,
+        "name": name,
     }
+    # 落到分析目录，导出 zip 时一并打包
+    try:
+        (f.parent / f"{name}_vector.geojson").write_text(
+            json.dumps(out, ensure_ascii=False), encoding="utf-8"
+        )
+    except Exception:
+        pass
+    return out
 
 
 def record_run(data_root: Path, key: str, payload: dict) -> None:
@@ -605,7 +616,8 @@ def export_bundle(data_root: Path, key: str, out_zip: Path) -> Path:
             "内容：\n"
             "  *.tif               指数/变化栅格（EPSG:4326，float32，nodata=NaN）\n"
             "  *.json              统计结果（均值/中位数/P10/P90/面积等）\n"
-            "  *_quicklook.png     伪彩快视图（与网页同一套色带与区间）\n\n"
+            "  *_quicklook.png     伪彩快视图（与网页同一套色带与区间）\n"
+            "  *_vector.geojson    按阈值二值化后的矢量面（含 area_km2 属性）\n\n"
             "读取示例：\n"
             "  python -c \"import rasterio; s=rasterio.open('ndvi.tif'); print(s.bounds, s.crs)\"\n"
         )
