@@ -64,9 +64,11 @@
                 :previewing="previewLayer?.scene_id === s.scene_id"
                 :download-ok="rawOkIds.has(s.scene_id) || s.has_raw"
                 :job="jobFor(s)"
+                :full-job="fullJobFor(s)"
                 @select="selectScene"
                 @preview="startPreview"
                 @download="startDownload"
+                @resume-full="onResumeFull"
               />
             </div>
           </div>
@@ -409,6 +411,8 @@ async function addrSearch() {
 }
 function selectScene(s) {
   activeScene.value = s
+  const b = s.bbox || geomBbox(s.footprint)
+  if (b) mapRef.value?.fitBbox(b)   // 缩放到整景范围
 }
 function ensureBbox() {
   if (bbox.value) return true
@@ -451,10 +455,17 @@ function bboxAreaKm2(b) {
   const h = (b[3] - b[1]) * 110.54
   return Math.abs(w * h)
 }
-function startDownload(s, mode = 'aoi') {
+async function startDownload(s, mode = 'aoi') {
   if (mode === 'aoi') {
     if (!ensureBbox()) return
     if (areaBlocked()) return
+  } else {
+    const yes = await msgBox.value?.confirm({
+      title: '整景下载',
+      message: '整景为全分辨率下载，单景常达数 GB，网络波动容易中断。\n建议优先用「AOI 下载」只取需要的范围。',
+      okText: '仍然整景下载',
+    })
+    if (!yes) return
   }
   // 先弹波段选择窗，确认后才开始下载
   bandPick.value = {
@@ -471,6 +482,19 @@ function onBandConfirm(bands) {
   bandPick.value = null
   logLn(`raw ${scene.scene_id} ${bands.length} 波段 · ${mode === 'full' ? '整景' : 'AOI'}`)
   startJob(scene, 'raw', null, bands, mode)
+}
+function fullJobFor(s) {
+  return (
+    jobs.value
+      .filter(j => j.scene_id === s.scene_id && j.detail && j.detail.mode === 'full')
+      .sort((a, b) => b.created - a.created)[0] || null
+  )
+}
+async function onResumeFull(j) {
+  try {
+    const r = await fetch(`/api/jobs/${j.id}/resume`, { method: 'POST' })
+    if (!r.ok) { showToast('继续失败：任务状态不支持') } else { logLn(`继续整景下载 ${j.scene_id}`) }
+  } catch (e) { showToast('继续失败: ' + e) }
 }
 function jobFor(s) {
   return jobs.value.find(j => j.scene_id === s.scene_id && j.type !== 'processed' && j.status === 'running')

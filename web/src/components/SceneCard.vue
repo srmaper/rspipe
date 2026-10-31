@@ -28,6 +28,9 @@
         整景下载
       </button>
     </div>
+    <div v-if="canResumeFull" class="row" style="margin-top:6px">
+      <button class="primary" @click="$emit('resume-full', fullJob)">继续整景下载</button>
+    </div>
     <div v-if="job && !downloadOk" class="pbar"><div :style="{ width: (job.progress || 0) * 100 + '%' }"></div></div>
     <div v-if="job && !downloadOk" class="hint">{{ job.message }}</div>
   </div>
@@ -42,10 +45,14 @@ const props = defineProps({
   previewing: Boolean,
   downloadOk: Boolean,   // raw 下载已完成 → 下一动作才是预览
   job: Object,
+  fullJob: Object,   // 该景最近一次「整景」任务（用于继续下载）
 })
 defineEmits(['select', 'download'])
 
 const busy = computed(() => props.job && ['queued', 'running'].includes(props.job.status))
+const canResumeFull = computed(
+  () => props.fullJob && ['paused', 'error'].includes(props.fullJob.status),
+)
 const fmtTime = computed(() => (props.scene.datetime || '').slice(0, 10))
 const cloudPct = computed(() => {
   const s = props.scene
