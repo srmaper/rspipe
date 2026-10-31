@@ -76,7 +76,7 @@
           <h3>图例</h3>
           <span class="lbar" :style="{ background: legendCss }"></span>
           <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
-          <div class="hint">{{ legendNote }}</div>
+          <div class="hint" style="white-space: pre-line">{{ legendNote }}</div>
         </div>
         <div class="card logbox" id="tour-log">
           <h3>日志</h3>
@@ -276,12 +276,13 @@ const legendHigh = computed(() =>
 const legendNote = computed(() => {
   const m = curMeta.value
   if (mode.value === 'change') {
-    return `白=变化小于阈值 ±${threshold.value}；红=植被/指标下降；绿=上升`
+    return `白=变化小于阈值 ±${threshold.value}\n红=指标下降，绿=上升`
   }
   const desc = INDICES.find((i) => i.name === index.value)?.desc || ''
   const range = m.vmin !== undefined ? `色带区间 ${m.vmin}~${m.vmax}` : ''
-  const hit = m.label ? `>${threshold.value} 判为「${m.high}」` : ''
-  return [index.value.toUpperCase(), desc, range, hit].filter(Boolean).join(' · ')
+  const line1 = [index.value.toUpperCase(), desc, range].filter(Boolean).join(' · ')
+  const line2 = m.label ? `>${threshold.value} 判为「${m.high}」` : ''
+  return [line1, line2].filter(Boolean).join('\n')
 })
 
 async function loadScenes() {
