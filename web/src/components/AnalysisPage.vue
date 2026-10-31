@@ -3,6 +3,7 @@
     <div id="bar">
       <span class="brand"><i></i> 数据分析</span>
       <button class="back" @click="$emit('home')">← 首页</button>
+      <button class="back" @click="goDownload">转下载页</button>
       <span class="sp"></span>
       <span class="muted">{{ sceneA ? sceneA : '' }}</span>
     </div>
@@ -182,6 +183,9 @@ const comparing = ref(false)
 const logs = ref([])
 const logEl = ref(null)
 
+function goDownload() {
+  location.hash = '#/download'
+}
 function logLn(s) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${s}`)
   if (logs.value.length > 300) logs.value = logs.value.slice(-200)
