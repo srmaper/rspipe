@@ -194,7 +194,7 @@ function logLn(s) {
   })
 }
 const swipe = ref(null)
-const extentVisible = ref(true)
+const extentVisible = ref(false)   // 与 MapCanvas 的默认值一致：范围框默认关
 const mode = ref('single')
 const scenes = ref([])
 const sceneA = ref('')

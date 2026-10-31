@@ -44,6 +44,7 @@
           <button v-for="c in channelsList" :key="c.v" :class="{ primary: channels === c.v }" @click="setChannels(c.v)">
             {{ c.label }}
           </button>
+          <button :class="{ primary: aoiVisible }" @click="toggleAoiLayer">AOI</button>
           <button @click="clearPreview">关闭</button>
         </div>
       </div>
@@ -114,6 +115,10 @@ const searching = ref(false)
 const rawOkIds = ref(new Set())   // raw 下载完成的景 id —— 之后才允许"生成预览"
 const logs = ref([])
 const logEl = ref(null)
+function toggleAoiLayer() {
+  aoiVisible.value = !aoiVisible.value
+  mapRef.value?.setAoiVisible(aoiVisible.value)
+}
 function goAnalysis() {
   location.hash = '#/analysis'
 }
@@ -131,6 +136,7 @@ const aoiTool = ref(null)       // 'rect' | 'poly' | 'search' | null —— 三�
 const activeScene = ref(null)
 const previewLayer = ref(null)
 const channels = ref('rgb')
+const aoiVisible = ref(true)
 const channelsList = [
   { v: 'rgb', label: '真彩色' },
   { v: 'false', label: '假彩 NIR' },
