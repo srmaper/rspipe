@@ -77,6 +77,13 @@ onMounted(() => {
           maxzoom: 18,
           attribution: '© Esri World_Imagery',
         },
+        imagery_lo: {
+          type: 'raster',
+          tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg'],
+          tileSize: 256,
+          maxzoom: 9,
+          attribution: '© EOX s2cloudless',
+        },
         anno: { type: 'raster', tiles: [TDT('cia')], tileSize: 256, maxzoom: 18, attribution: '© 天地图 cia' },
         label: { type: 'raster', tiles: [TDT('cva')], tileSize: 256, maxzoom: 18, attribution: '© 天地图 cva' },
         vbg: {
@@ -87,9 +94,28 @@ onMounted(() => {
       },
       layers: [
         { id: 'bg', type: 'background', paint: { 'background-color': '#eef1f7' } },
-        { id: 'imagery', type: 'raster', source: 'imagery', layout: { visibility: 'none' } },
-        { id: 'anno', type: 'raster', source: 'anno', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.75 } },
-        { id: 'label', type: 'raster', source: 'label', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.75 } },
+        {
+          id: 'imagery_lo', type: 'raster', source: 'imagery_lo', maxzoom: 9,
+          layout: { visibility: 'none' },
+          paint: { 'raster-opacity': 1, 'raster-contrast': 0.05, 'raster-saturation': 0.05 },
+        },
+        {
+          id: 'imagery', type: 'raster', source: 'imagery', minzoom: 8,
+          layout: { visibility: 'none' },
+          paint: {
+            'raster-contrast': 0.12,
+            'raster-saturation': 0.08,
+            'raster-brightness-min': 0.02,
+          },
+        },
+        {
+          id: 'anno', type: 'raster', source: 'anno', minzoom: 3,
+          layout: { visibility: 'none' },
+          paint: {
+            'raster-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.55, 6, 0.8],
+          },
+        },
+        { id: 'label', type: 'raster', source: 'label', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.8 } },
       ],
       sprites: undefined,
       glyphs: 'https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf',
@@ -354,11 +380,12 @@ function setBasemap(kind) {
   if (!map) return
   // 注意：不要用 isStyleLoaded() 当门槛——load 事件后它因瓦片仍在流会回 false，
   // 导致首次 setBasemap 空转（tiles.html 注释里踩过的同一坑）。setLayoutProperty 自带抛错兜底。
-  const ids = ['imagery', 'anno', 'label', ...VB_IDS]
+  const ids = ['imagery', 'imagery_lo', 'anno', 'label', ...VB_IDS]
   ids.forEach(id => { try { map.setLayoutProperty(id, 'visibility', 'none') } catch (e) {} })
   if (kind === 'imagery') {
-    map.setLayoutProperty('imagery', 'visibility', 'visible')  // ArcGIS 影像
-    map.setLayoutProperty('anno', 'visibility', 'visible')     // 天地图影像注记
+    map.setLayoutProperty('imagery', 'visibility', 'visible')     // ArcGIS 影像（z>=8）
+    map.setLayoutProperty('imagery_lo', 'visibility', 'visible')  // EOX 无云影像（z<9）
+    map.setLayoutProperty('anno', 'visibility', 'visible')        // 天地图影像注记
     restackBusinessLayers(map)
   } else {
     // vector：carto 矢量路网 + 天地图矢量注记（注记层保持在最顶）
