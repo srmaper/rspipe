@@ -10,7 +10,7 @@
           <span class="st">{{ statusText(j.status) }} {{ Math.round((j.progress || 0) * 100) }}%</span>
         </div>
         <div class="pbar"><div :style="{ width: (j.progress || 0) * 100 + '%' }"></div></div>
-        <div class="hint">{{ j.type === 'raw' ? 'raw 全波段' : 'processed 成果' }} · {{ j.message }}</div>
+        <div v-if="lineText(j)" class="hint">{{ lineText(j) }}</div>
         <div v-if="j.status === 'ok' || j.status === 'error'" class="row act" style="margin-top:6px">
           <button @click="$emit('preview', j)">预览</button>
           <button @click="$emit('meta', j)">元数据</button>
@@ -27,6 +27,21 @@ defineProps({ jobs: Array })
 defineEmits(['preview', 'meta', 'download', 'delete'])
 const statusText = s => ({ queued: '排队', running: '运行', ok: '完成', error: '失败' }[s] || s)
 const dotColor = s => ({ ok: '#16a34a', running: '#2563eb', error: '#dc2626', queued: '#aab2bd' }[s] || '#aab2bd')
+
+// 第二行：只在有信息量时显示（进度提示 / 失败原因 / 完成后的波段数与体积）
+function lineText(j) {
+  if (j.status === 'error') return j.message || '失败'
+  if (j.status === 'ok') {
+    const bands = (j.detail && j.detail.bands) || []
+    const mb = j.detail && j.detail.bytes ? Math.round(j.detail.bytes / 1048576) : 0
+    const parts = []
+    if (j.type === 'processed') parts.push('成果 COG')
+    if (bands.length) parts.push(bands.length + ' 波段')
+    if (mb) parts.push(mb + ' MB')
+    return parts.join(' · ')
+  }
+  return j.message || ''
+}
 </script>
 
 <style scoped>
