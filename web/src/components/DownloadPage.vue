@@ -455,8 +455,17 @@ function startPreview(s) {
   const dataBounds = s.raw_bounds || s.cog_bounds || bbox.value || sceneBounds
   previewLayer.value = { ...s, provider, collection, bounds: dataBounds, ready: true }
   channels.value = 'rgb'
-  if (dataBounds) mapRef.value?.fitBbox(dataBounds)
+  // 视野：有 AOI 就停在 AOI（否则整景预览会把 AOI 甩出屏幕，看起来像"没画"）
+  const inter = intersectBounds(dataBounds, bbox.value)
+  if (bbox.value && dataBounds && !inter) logLn('该景不覆盖当前 AOI，AOI 不在视野内')
+  const target = inter || dataBounds
+  if (target) mapRef.value?.fitBbox(target)
   logLn(`预览 ${s.scene_id} · 缩放到${s.raw_bounds || s.cog_bounds ? '裁剪范围' : bbox.value ? ' AOI' : '景范围'}`)
+}
+function intersectBounds(a, b) {
+  if (!a || !b || a.length !== 4 || b.length !== 4) return null
+  const box = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]
+  return box[0] < box[2] && box[1] < box[3] ? box : null
 }
 function bboxAreaKm2(b) {
   if (!b || b.length !== 4) return 0

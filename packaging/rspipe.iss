@@ -22,6 +22,7 @@ OutputBaseFilename=rspipe-{#MyAppVersion}-setup
 Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=rspipe.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

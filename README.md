@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="76" align="right" alt="rspipe" />
+
 # rspipe — 遥感影像一站式平台（检索 · 下载 · 分析）
 
 **输入一个地名，或在地图上圈一块地，几秒内看到 Sentinel-2 / Landsat 影像；

@@ -117,7 +117,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
-    icon=None,
+    icon=str(ROOT / "packaging" / "rspipe.ico"),
 )
 
 coll = COLLECT(

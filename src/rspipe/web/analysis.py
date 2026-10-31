@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 from pathlib import Path
@@ -127,6 +128,37 @@ def _band_path(raw_dir: Path, sid: str, key: str) -> Path | None:
         if f.exists():
             return f
     return None
+
+
+def _copy_sources(
+    data_root: Path,
+    provider: str,
+    scene_id: str,
+    dest_dir: Path,
+    source_name: str,
+    aoi_name: str,
+) -> bool:
+    """把该景的 4326 预览栅格（含全部已下载波段）与 AOI 复制进分析目录。
+
+    分析结果因此自带原始影像，不依赖 raw 目录是否被清理，导出 zip 时一并打包。
+    """
+    import shutil
+
+    raw_dir = Path(data_root) / "raw" / provider / scene_id
+    pv = raw_dir / f"{scene_id}.preview_4326.tif"
+    if not pv.exists():
+        return False
+    try:
+        dst = dest_dir / source_name
+        if not dst.exists() or dst.stat().st_mtime < pv.stat().st_mtime:
+            shutil.copyfile(pv, dst)
+    except OSError:
+        return False
+    aoi = raw_dir / "aoi.geojson"
+    if aoi.exists():
+        with contextlib.suppress(OSError):
+            shutil.copyfile(aoi, dest_dir / aoi_name)
+    return True
 
 
 def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
@@ -273,6 +305,9 @@ def compute_scene_index(
         "area_km2": round(total_km2, 2),
         "bounds": [round(v, 5) for v in rasterio.open(dest).bounds],
     }
+    stats["has_source"] = _copy_sources(
+        data_root, provider, scene_id, dest_dir, "source_4326.tif", "aoi.geojson"
+    )
     (dest_dir / f"{index}.json").write_text(
         json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -404,6 +439,10 @@ def compute_change(
     (dest_dir / f"{index}_change.json").write_text(
         json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    stats["has_source"] = _copy_sources(
+        data_root, provider, a, dest_dir, "source_4326.tif", "aoi.geojson"
+    )
+    _copy_sources(data_root, provider, b, dest_dir, "source_b_4326.tif", "aoi_b.geojson")
     return {"ok": True, "key": key, "stats": stats}
 
 
@@ -486,12 +525,10 @@ def vectorize_index(
         "name": name,
     }
     # 落到分析目录，导出 zip 时一并打包
-    try:
+    with contextlib.suppress(OSError):
         (f.parent / f"{name}_vector.geojson").write_text(
             json.dumps(out, ensure_ascii=False), encoding="utf-8"
         )
-    except Exception:
-        pass
     return out
 
 
@@ -547,6 +584,8 @@ def list_history(data_root: Path, limit: int = 50) -> list[dict]:
                 "scene_b": run.get("scene_b") or (parts[1] if len(parts) > 1 else None),
                 "created": run.get("created") or d.stat().st_mtime,
                 "stats": stats,
+                "has_source": (d / "source_4326.tif").exists(),
+                "has_aoi": (d / "aoi.geojson").exists(),
             }
         )
     return out
@@ -605,7 +644,7 @@ def export_bundle(data_root: Path, key: str, out_zip: Path) -> Path:
             if not f.is_file():
                 continue
             zf.write(f, f.name)
-            if f.suffix.lower() in (".tif", ".tiff"):
+            if f.suffix.lower() in (".tif", ".tiff") and not f.name.startswith("source"):
                 png = _quicklook_png(f)
                 if png:
                     zf.writestr(f"{f.stem}_quicklook.png", png)
@@ -615,11 +654,15 @@ def export_bundle(data_root: Path, key: str, out_zip: Path) -> Path:
             f"来源：{key}\n\n"
             "内容：\n"
             "  *.tif               指数/变化栅格（EPSG:4326，float32，nodata=NaN）\n"
+            "  source_4326.tif     原始影像（分析用的 4326 栅格，1=R 2=G 3=B 4=NIR，ρ×10000）\n"
+            "  source_b_4326.tif   两期变化时第二期原始影像\n"
+            "  aoi.geojson         下载 AOI 边界（两期时为 aoi.geojson / aoi_b.geojson）\n"
             "  *.json              统计结果（均值/中位数/P10/P90/面积等）\n"
             "  *_quicklook.png     伪彩快视图（与网页同一套色带与区间）\n"
             "  *_vector.geojson    按阈值二值化后的矢量面（含 area_km2 属性）\n\n"
             "读取示例：\n"
             "  python -c \"import rasterio; s=rasterio.open('ndvi.tif'); print(s.bounds, s.crs)\"\n"
+            "  python -c \"import rasterio; s=rasterio.open('source_4326.tif'); print(s.count, s.dtypes)\"\n"
         )
         zf.writestr("README.txt", readme)
     return out_zip

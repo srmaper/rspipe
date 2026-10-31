@@ -567,6 +567,8 @@ def create_app() -> FastAPI:
             return res
         res["classify"] = classify_stats(Path(cfg.data_root), provider, scene_id, index, threshold)
         res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png"
+        res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
+        res["has_source"] = bool(res.get("stats", {}).get("has_source"))
         from rspipe.web.analysis import record_run
 
         record_run(
@@ -599,6 +601,8 @@ def create_app() -> FastAPI:
         res = compute_change(Path(cfg.data_root), provider, a, b, coll, index, threshold)
         if res.get("ok"):
             res["tiles"] = f"/api/analysis/tiles/{res['key']}/{index}_change/{{z}}/{{x}}/{{y}}.png"
+            res["source_tiles"] = f"/api/analysis/source/{res['key']}/{{z}}/{{x}}/{{y}}.png"
+            res["has_source"] = bool(res.get("stats", {}).get("has_source"))
             from rspipe.web.analysis import record_run
 
             record_run(
@@ -682,6 +686,30 @@ def create_app() -> FastAPI:
         return Response(
             content=data, media_type="image/png", headers={"Cache-Control": "max-age=3600"}
         )
+
+    @app.get("/api/analysis/source/{key}/{z}/{x}/{y}.png")
+    def api_analysis_source_tile(key: str, z: int, x: int, y: int):
+        """分析目录里的原始影像（source_4326.tif）→ 真彩瓦片。"""
+        f = Path(cfg.data_root) / "analysis" / key / "source_4326.tif"
+        if not f.exists():
+            return Response(status_code=204)
+        data = render_raster_tile(f, z, x, y, "rgb")
+        if data is None:
+            return Response(status_code=204)
+        return Response(
+            content=data, media_type="image/png", headers={"Cache-Control": "max-age=604800"}
+        )
+
+    @app.get("/api/analysis/aoi/{key}")
+    def api_analysis_aoi(key: str) -> dict:
+        """分析时随结果一起保存的 AOI 边界。"""
+        f = Path(cfg.data_root) / "analysis" / key / "aoi.geojson"
+        if not f.exists():
+            return {"type": "FeatureCollection", "features": []}
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            return {"type": "FeatureCollection", "features": []}
 
     # ---------- 瓦片（本地 COG 优先；缺失时直接读云端金字塔层做整景预览） ----------
     @app.get("/api/tiles/{scene_id}/{z}/{x}/{y}.png")

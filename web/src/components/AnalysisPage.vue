@@ -84,14 +84,16 @@
       <div id="center" data-tour="map">
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
-          <button :class="{ primary: resultVisible }" @click="toggleResult">结果</button>
+          <button :class="{ primary: sourceOn }" :disabled="!hasSource" @click="toggleSource">原始影像</button>
+          <button :class="{ primary: resultVisible }" @click="toggleResult">结果影像</button>
           <button v-if="mode === 'change'" :disabled="comparing" @click="openSwipe">
-            {{ comparing ? "准备中…" : "双屏" }}
+            {{ comparing ? "准备中…" : "双屏比对" }}
           </button>
           <button :class="{ primary: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
-            {{ vectorBusy ? "生成中…" : "矢量" }}
+            {{ vectorBusy ? "生成中…" : "阈值矢量" }}
           </button>
-          <button :class="{ primary: extentVisible }" @click="toggleExtent">范围</button>
+          <button :class="{ primary: aoiOn }" :disabled="!hasAoi" @click="toggleAoi">AOI</button>
+          <button @click="closeLayers">关闭</button>
         </div>
         <div class="badge" v-if="preview">{{ preview.scene_id }}</div>
       </div>
@@ -194,7 +196,7 @@ const TOUR_STEPS = [
   {
     selector: '#center',
     title: '地图与图例',
-    text: '左上「结果 / 范围」控制图层显示，右下切换底图，底部显示经纬度与比例尺；左栏图例说明伪彩含义。',
+    text: '左上依次切换「原始影像 / 结果影像 / 阈值矢量 / AOI」，两期变化模式还有「双屏比对」；右下切换底图，底部显示经纬度与比例尺。',
   },
   {
     selector: '#tour-result',
@@ -223,10 +225,13 @@ function logLn(s) {
   })
 }
 const swipe = ref(null)
-const extentVisible = ref(false)   // 与 MapCanvas 的默认值一致：范围框默认关
 const history = ref([])
 const msgBox = ref(null)
 function showToast(m) { msgBox.value?.toast(m) }
+const sourceOn = ref(true)      // 原始影像（分析目录里的 source_4326.tif）
+const aoiOn = ref(true)         // 下载 AOI 边界
+const hasSource = ref(false)
+const hasAoi = ref(false)
 const vectorOn = ref(false)
 const vectorBusy = ref(false)
 const vectorKey = ref('')
@@ -359,6 +364,10 @@ async function run() {
         scene_id: sceneA.value, ready: true,
         bounds: j.stats.bounds,
       }
+      resultVisible.value = true
+      hasSource.value = !!j.has_source
+      applySource(sceneA.value, j.stats.bounds)
+      applyAoi(sceneA.value)
       mapRef.value?.setPreviewTiles(sceneA.value, 'rgb', '', '', j.stats.bounds)
       mapRef.value?.fitBbox(j.stats.bounds)
       vectorKey.value = sceneA.value
@@ -380,6 +389,10 @@ async function run() {
       tileTemplate.value = j.tiles
       const bounds = statsBounds()
       preview.value = { scene_id: j.key, ready: true, bounds }
+      resultVisible.value = true
+      hasSource.value = !!j.has_source
+      applySource(j.key, bounds)
+      applyAoi(j.key)
       mapRef.value?.setPreviewTiles(j.key, 'rgb', '', '', bounds)
       if (bounds) mapRef.value?.fitBbox(bounds)
       vectorKey.value = j.key
@@ -513,6 +526,9 @@ async function loadHistory(h) {
   tileTemplate.value = `/api/analysis/tiles/${h.key}/${name}/{z}/{x}/{y}.png`
   const bounds = h.stats?.bounds
   preview.value = { scene_id: h.key, ready: true, bounds }
+  hasSource.value = !!h.has_source
+  applySource(h.key, bounds)
+  applyAoi(h.key)
   if (bounds) {
     mapRef.value?.setPreviewTiles(h.key, 'rgb', '', '', bounds)
     mapRef.value?.fitBbox(bounds)
@@ -558,9 +574,40 @@ function downloadResult(keyArg) {
   a.remove()
   logLn(`导出分析结果 ${key}.zip`)
 }
-function toggleExtent() {
-  extentVisible.value = !extentVisible.value
-  mapRef.value?.setExtentVisible(extentVisible.value)
+function applySource(key, bounds) {
+  if (!key) return
+  const url = `/api/analysis/source/${encodeURIComponent(key)}/{z}/{x}/{y}.png`
+  if (sourceOn.value) mapRef.value?.setSourceTiles(url, bounds)
+}
+async function applyAoi(key) {
+  if (!key) return
+  try {
+    const r = await fetch(`/api/analysis/aoi/${encodeURIComponent(key)}`)
+    const gj = await r.json()
+    const f = (gj.features || [])[0]
+    hasAoi.value = !!f
+    mapRef.value?.setAoiPolygon(f ? f.geometry : null)
+    mapRef.value?.setAoiVisible(aoiOn.value)
+  } catch {
+    hasAoi.value = false
+  }
+}
+function toggleSource() {
+  sourceOn.value = !sourceOn.value
+  mapRef.value?.setSourceVisible(sourceOn.value)
+}
+function toggleAoi() {
+  aoiOn.value = !aoiOn.value
+  mapRef.value?.setAoiVisible(aoiOn.value)
+}
+function closeLayers() {
+  preview.value = null
+  hasSource.value = false
+  hasAoi.value = false
+  mapRef.value?.clearSource()
+  mapRef.value?.clearPreview()
+  mapRef.value?.clearResultVector()
+  mapRef.value?.setAoiPolygon(null)
 }
 
 function statsBounds() {

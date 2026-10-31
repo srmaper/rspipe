@@ -276,6 +276,33 @@ function setSelectedFootprint(geom) {
 }
 
 let previewId = null
+// ── 原始影像（分析页）：分析目录里复制的那份 4326 栅格，压在结果影像之下 ──
+let sourceVisible = true
+function setSourceTiles(url, bounds) {
+  if (!map) return
+  clearSource()
+  const src = { type: 'raster', tiles: [url], tileSize: 256, minzoom: 5, maxzoom: 18 }
+  if (bounds && bounds.length === 4) src.bounds = bounds
+  map.addSource('srcprev', src)
+  map.addLayer({ id: 'srcprev', type: 'raster', source: 'srcprev', paint: { 'raster-opacity': 1 } })
+  try { map.setLayoutProperty('srcprev', 'visibility', sourceVisible ? 'visible' : 'none') } catch (e) {}
+  restackBusinessLayers(map)
+}
+function clearSource() {
+  if (!map) return
+  try { if (map.getLayer('srcprev')) map.removeLayer('srcprev') } catch (e) {}
+  try { if (map.getSource('srcprev')) map.removeSource('srcprev') } catch (e) {}
+}
+function setSourceVisible(visible) {
+  sourceVisible = visible
+  if (!map) return
+  try {
+    if (map.getLayer('srcprev')) {
+      map.setLayoutProperty('srcprev', 'visibility', visible ? 'visible' : 'none')
+      restackBusinessLayers(map)
+    }
+  } catch (e) {}
+}
 function setPreviewTiles(sceneId, channels, provider, collection, bounds) {
   if (!map) return
   clearPreview()
@@ -339,7 +366,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['preview', 'pext-line', 'rvec-fill', 'rvec-line', 'selfp-fill', 'selfp-line', 'aoi-line']
+  const top = ['srcprev', 'preview', 'pext-line', 'rvec-fill', 'rvec-line', 'selfp-fill', 'selfp-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
@@ -376,6 +403,7 @@ function viewportBbox() {
 
 defineExpose({
   fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, setResultVector, setVectorVisible, clearPreview, setBasemap, setDrawMode, viewportBbox,
+  setSourceTiles, clearSource, setSourceVisible, clearResultVector,
 })
 </script>
 
