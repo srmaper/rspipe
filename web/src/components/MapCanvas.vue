@@ -112,7 +112,7 @@ onMounted(() => {
           id: 'anno', type: 'raster', source: 'anno', minzoom: 3,
           layout: { visibility: 'none' },
           paint: {
-            'raster-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.55, 6, 0.8],
+            'raster-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.7, 6, 0.9],
           },
         },
         { id: 'label', type: 'raster', source: 'label', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.8 } },
