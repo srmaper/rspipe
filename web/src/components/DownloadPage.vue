@@ -595,11 +595,12 @@ defineEmits(['home'])
 #tsearch input { border: 1px solid var(--line); border-radius: 7px; font: inherit; width: 240px; padding: 3px 10px; }
 .channelbar {
   position: absolute; z-index: 31; top: 12px; left: 12px;
-  display: flex; flex-direction: column; gap: 4px; background: rgba(255,255,255,.96);
+  display: flex; flex-direction: column; gap: 4px; width: 90px; box-sizing: border-box;
+  background: rgba(255,255,255,.96);
   border: 1px solid var(--line); border-radius: 10px; padding: 5px 7px;
   box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
-.channelbar button { min-height: 26px; padding: 2px 10px; font-size: 11.5px; white-space: nowrap; }
+.channelbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
 .guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
 .back { flex: none; }
 </style>

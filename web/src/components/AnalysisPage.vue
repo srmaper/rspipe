@@ -98,7 +98,7 @@
 
       <!-- 右栏 -->
       <div id="right">
-        <div class="card" id="tour-result" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div class="card" id="tour-result" style="flex:4 1 0;min-height:0;display:flex;flex-direction:column">
           <h3>分析结果</h3>
           <div class="reslist">
             <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
@@ -108,7 +108,7 @@
           </div>
         </div>
 
-        <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div class="card" style="flex:6 1 0;min-height:0;display:flex;flex-direction:column">
           <h3>历史分析</h3>
           <div class="reslist">
             <div v-if="!history.length" class="hint">还没有分析记录，算一次就会出现在这里。</div>
@@ -620,11 +620,11 @@ onMounted(async () => {
 .lv { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
 .layerbar {
   position: absolute; left: 12px; top: 12px; z-index: 31;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 4px; width: 90px; box-sizing: border-box;
   background: rgba(255,255,255,.96); border: 1px solid var(--line);
-  border-radius: 10px; padding: 4px; box-shadow: 0 4px 18px rgba(20,30,45,.14);
+  border-radius: 10px; padding: 5px 7px; box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
-.layerbar button { min-height: 26px; padding: 2px 10px; font-size: 11.5px; white-space: nowrap; }
+.layerbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
 .badge {
   position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
   z-index: 20; max-width: 70%;
