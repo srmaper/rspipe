@@ -13,7 +13,6 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import maplibregl from 'maplibre-gl'
 import cartoLayers from '../assets/carto-positron.json'
-import cartoLabels from '../assets/carto-labels.json'
 
 const TDT = (key) =>
   `https://t6.tianditu.gov.cn/${key}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0`
@@ -333,14 +332,6 @@ function injectCarto(map) {
     if (d.type === 'line') d.paint['line-opacity'] = 0.7
     try { map.addLayer(d); VB_IDS.push(d.id) } catch (e) { console.warn('vbg skip', d.id, e) }
   }
-  // 矢量注记（中文）：与路网同源，压在路网之上
-  for (const ly of cartoLabels) {
-    const d = JSON.parse(JSON.stringify(ly))
-    d.id = 'vlb-' + d.id
-    d.source = 'vbg'
-    d.layout = { ...(d.layout || {}), visibility: 'none' }
-    try { map.addLayer(d); VB_IDS.push(d.id) } catch (e) { console.warn('vlb skip', d.id, e) }
-  }
   // 注记层必须压在矢量路网之上
   try { map.moveLayer('label') } catch (e) {}
   // AOI/足迹/预览等业务图层重新回到最顶
@@ -370,8 +361,9 @@ function setBasemap(kind) {
     map.setLayoutProperty('anno', 'visibility', 'visible')     // 天地图影像注记
     restackBusinessLayers(map)
   } else {
-    // vector：carto 矢量路网 + 中文矢量注记（不再用模糊的天地图栅格注记）
+    // vector：carto 矢量路网 + 天地图矢量注记（注记层保持在最顶）
     VB_IDS.forEach(id => map.setLayoutProperty(id, 'visibility', 'visible'))
+    map.setLayoutProperty('label', 'visibility', 'visible')
     restackBusinessLayers(map)
   }
 }
