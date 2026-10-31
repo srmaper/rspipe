@@ -15,8 +15,8 @@
       <option value="aoi">AOI 实测（准，首次 20–40 秒）</option>
     </select>
     <label>传感器</label>
-    <label class="chk"><input type="checkbox" value="earth-search|sentinel-2-l2a" v-model="checks" /> Sentinel-2</label>
-    <label class="chk"><input type="checkbox" value="planetary-computer|landsat-c2-l2" v-model="checks" /> Landsat 8/9</label>
+    <label class="chk"><input type="radio" value="earth-search|sentinel-2-l2a" v-model="pick" /> Sentinel-2</label>
+    <label class="chk"><input type="radio" value="planetary-computer|landsat-c2-l2" v-model="pick" /> Landsat 8/9</label>
     <div class="row">
       <button class="primary" :disabled="!bboxReady || loading" @click="go">
         {{ loading ? '检索中…' : '🔍 检索' }}
@@ -32,13 +32,13 @@ const props = defineProps({ cfg: Object, loading: Boolean, bboxReady: Boolean })
 const emit = defineEmits(['search'])
 
 const cfg = props.cfg
-const checks = computed({
-  get: () => cfg.providers.map(p => (Array.isArray(p) ? `${p[0]}|${p[1]}` : `${p.provider}|${p.collection}`)),
+const keyOf = p => (Array.isArray(p) ? `${p[0]}|${p[1]}` : `${p.provider}|${p.collection}`)
+// 单选：一次只查一个数据源
+const pick = computed({
+  get: () => keyOf((cfg.providers || [])[0] || 'earth-search|sentinel-2-l2a'),
   set: v => {
-    cfg.providers = v.map(s => {
-      const [provider, collection] = s.split('|')
-      return [provider, collection]
-    })
+    const [provider, collection] = v.split('|')
+    cfg.providers = [[provider, collection]]
   },
 })
 
