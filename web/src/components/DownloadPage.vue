@@ -3,6 +3,7 @@
     <div id="bar">
       <span class="brand"><i></i> rspipe 影像</span>
       <button class="back" @click="$emit('home')">← 首页</button>
+      <button class="back" @click="goAnalysis">转分析页</button>
       <span class="sp"></span>
     </div>
 
@@ -113,6 +114,9 @@ const searching = ref(false)
 const rawOkIds = ref(new Set())   // raw 下载完成的景 id —— 之后才允许"生成预览"
 const logs = ref([])
 const logEl = ref(null)
+function goAnalysis() {
+  location.hash = '#/analysis'
+}
 function logLn(s) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${s}`)
   // 最新日志滚动到底部
