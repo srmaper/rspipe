@@ -75,9 +75,12 @@ def download_scene_raw(
         asset = scene.asset_by_key(key)
         href = sign_href(asset.href) if needs_signing(asset.href) else asset.href
         with CogReader(href, block_size=block_size, abort_check=should_stop) as r:
-            col, row, w, h = r.window_for_bbox(tuple(bbox))
-            if w <= 0 or h <= 0:
-                raise RuntimeError("AOI 与该景范围无交集，请重新圈选")
+            if bbox is None:  # 整景
+                col, row, w, h = 0, 0, int(r.info.width), int(r.info.height)
+            else:
+                col, row, w, h = r.window_for_bbox(tuple(bbox))
+                if w <= 0 or h <= 0:
+                    raise RuntimeError("AOI 与该景范围无交集，请重新圈选")
             data = r.read_window(col, row, w, h)
             a, b, c, d, e, f = r.info.transform or (1, 0, 0, 0, -1, 0)
             transform = Affine(a, b, c, d, e, f) * Affine.translation(col, row)
@@ -114,7 +117,8 @@ def download_scene_raw(
     from rspipe.web.postprocess import build_preview_4326, write_aoi_geojson
 
     try:
-        write_aoi_geojson(out_dir, bbox)
+        if bbox is not None:
+            write_aoi_geojson(out_dir, bbox)
         preview = build_preview_4326(out_dir, collection)
     except Exception as exc:
         log.warning("postprocess failed %s: %s", scene_id, exc)

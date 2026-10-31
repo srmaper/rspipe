@@ -86,7 +86,7 @@
       :sid="bandPick.sid"
       :sentinel="bandPick.sentinel"
       :provider="bandPick.provider"
-      :area-km2="aoiArea"
+      :area-km2="bandPick.areaKm2 ?? aoiArea"
       @confirm="onBandConfirm"
       @cancel="bandPick = null"
     />
@@ -438,26 +438,42 @@ function startPreview(s) {
   if (dataBounds) mapRef.value?.fitBbox(dataBounds)
   logLn(`预览 ${s.scene_id} · 缩放到${s.raw_bounds || s.cog_bounds ? '裁剪范围' : bbox.value ? ' AOI' : '景范围'}`)
 }
-function startDownload(s) {
-  if (!ensureBbox()) return
-  if (areaBlocked()) return
+function bboxAreaKm2(b) {
+  if (!b || b.length !== 4) return 0
+  const mid = (((b[1] + b[3]) / 2) * Math.PI) / 180
+  const w = (b[2] - b[0]) * 111.32 * Math.cos(mid)
+  const h = (b[3] - b[1]) * 110.54
+  return Math.abs(w * h)
+}
+function startDownload(s, mode = 'aoi') {
+  if (mode === 'aoi') {
+    if (!ensureBbox()) return
+    if (areaBlocked()) return
+  }
   // 先弹波段选择窗，确认后才开始下载
-  bandPick.value = { sid: s.scene_id, provider: s.provider, sentinel: s.collection.includes('sentinel'), scene: s }
+  bandPick.value = {
+    sid: s.scene_id,
+    provider: s.provider,
+    sentinel: s.collection.includes('sentinel'),
+    scene: s,
+    mode,
+    areaKm2: mode === 'full' ? bboxAreaKm2(s.bbox) : aoiArea.value,
+  }
 }
 function onBandConfirm(bands) {
-  const { scene } = bandPick.value
+  const { scene, mode } = bandPick.value
   bandPick.value = null
-  logLn(`raw ${scene.scene_id} ${bands.length} 波段`)
-  startJob(scene, 'raw', null, bands)
+  logLn(`raw ${scene.scene_id} ${bands.length} 波段 · ${mode === 'full' ? '整景' : 'AOI'}`)
+  startJob(scene, 'raw', null, bands, mode)
 }
 function jobFor(s) {
   return jobs.value.find(j => j.scene_id === s.scene_id && j.type !== 'processed' && j.status === 'running')
     || jobs.value.filter(j => j.scene_id === s.scene_id).sort((a, b) => (b.id || 0) < (a.id || 0) ? -1 : 1)[0] || null
 }
-async function startJob(s, type, onOk, bands) {
+async function startJob(s, type, onOk, bands, mode = 'aoi') {
   const r = await fetch('/api/jobs', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, provider: s.provider, collection: s.collection, scene_id: s.scene_id, aoi_bbox: bbox.value, bands: bands && bands.length ? bands : undefined }),
+    body: JSON.stringify({ type, mode, provider: s.provider, collection: s.collection, scene_id: s.scene_id, aoi_bbox: bbox.value || s.bbox, bands: bands && bands.length ? bands : undefined }),
   })
   if (!r.ok) {
     const txt = await r.text()

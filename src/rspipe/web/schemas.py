@@ -59,6 +59,7 @@ class SceneOut(BaseModel):
 
 class JobReq(BaseModel):
     type: Literal["raw", "processed"]
+    mode: Literal["aoi", "full"] = Field("aoi", description="aoi=按 AOI 裁剪；full=整景")
     provider: str
     collection: str
     scene_id: str

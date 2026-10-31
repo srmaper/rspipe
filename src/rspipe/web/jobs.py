@@ -217,7 +217,10 @@ class JobCenter:
             provider=req.provider,
             collection=req.collection,
             aoi_bbox=tuple(req.aoi_bbox),
-            detail={"bands": list(req.bands)} if req.bands else {},
+            detail={
+                "bands": list(req.bands) if req.bands else [],
+                "mode": getattr(req, "mode", "aoi"),
+            },
         )
         self.jobs[job.id] = job
         self._cancels[job.id] = threading.Event()
@@ -295,7 +298,7 @@ class JobCenter:
                     job.scene_id,
                     job.provider,
                     job.collection,
-                    tuple(job.aoi_bbox),
+                    None if job.detail.get("mode") == "full" else tuple(job.aoi_bbox),
                     keys=job.detail.get("bands"),
                     progress=lambda f, m: self._prog(job, f, m),
                     should_stop=self._should_stop(job),

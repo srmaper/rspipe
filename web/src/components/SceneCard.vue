@@ -15,9 +15,17 @@
       <button
         class="primary"
         :disabled="busy || downloadOk"
-        @click="downloadOk ? null : $emit('download', scene)"
+        :title="'按当前 AOI 裁剪下载（≤500 km²）'"
+        @click="downloadOk ? null : $emit('download', scene, 'aoi')"
       >
-        {{ downloadOk ? '✔ 下载完成' : btnText }}
+        {{ downloadOk ? '✔ 已下载' : busy ? btnText : 'AOI 下载' }}
+      </button>
+      <button
+        :disabled="busy"
+        title="下载整景全分辨率（体积可能达数 GB）"
+        @click="$emit('download', scene, 'full')"
+      >
+        整景下载
       </button>
     </div>
     <div v-if="job && !downloadOk" class="pbar"><div :style="{ width: (job.progress || 0) * 100 + '%' }"></div></div>
