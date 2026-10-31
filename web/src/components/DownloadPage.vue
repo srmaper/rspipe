@@ -144,6 +144,7 @@ const sCfg = ref({
   start: new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10),
   end: new Date().toISOString().slice(0, 10),
   cloud: 10,
+  cloud_mode: 'scene',
   providers: [
     { provider: 'earth-search', collection: 'sentinel-2-l2a' },
     { provider: 'planetary-computer', collection: 'landsat-c2-l2' },

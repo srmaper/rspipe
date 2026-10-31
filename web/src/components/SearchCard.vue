@@ -9,6 +9,11 @@
     </div>
     <label>整景云量上限：{{ cfg.cloud }}%</label>
     <input type="range" min="0" max="80" v-model.number="cfg.cloud" style="width:100%" />
+    <label>云量口径</label>
+    <select v-model="cfg.cloud_mode" style="width:100%">
+      <option value="scene">整景云量（快，约 1 秒）</option>
+      <option value="aoi">AOI 实测（准，首次 20–40 秒）</option>
+    </select>
     <label>传感器</label>
     <label class="chk"><input type="checkbox" value="earth-search|sentinel-2-l2a" v-model="checks" /> Sentinel-2</label>
     <label class="chk"><input type="checkbox" value="planetary-computer|landsat-c2-l2" v-model="checks" /> Landsat 8/9</label>
@@ -42,6 +47,7 @@ function go() {
     start: cfg.start + 'T00:00:00Z',
     end: cfg.end + 'T23:59:59Z',
     cloud: cfg.cloud,
+    cloud_mode: cfg.cloud_mode || 'scene',
     providers: cfg.providers,
   })
 }

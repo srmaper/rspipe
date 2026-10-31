@@ -276,12 +276,14 @@ def create_app() -> FastAPI:
                 log.warning("search %s/%s failed: %s", prov, coll, exc)
                 continue
             scenes = [s for s in scenes if s.collection == coll]
+            measure_aoi = req.cloud_mode == "aoi"
             ranked = rank_scenes(
                 scenes,
                 bbox,
                 auth=pipe._auth_for(prov),
                 prefer_tier1="landsat" in coll,
                 min_overlap=req.min_overlap,
+                measure_aoi=measure_aoi,
             )
             if not ranked and scenes:
                 # 覆盖度全不达标时放宽门槛重新排名（榜单会如实显示覆盖度）
@@ -291,6 +293,7 @@ def create_app() -> FastAPI:
                     auth=pipe._auth_for(prov),
                     prefer_tier1="landsat" in coll,
                     min_overlap=0.05,
+                    measure_aoi=measure_aoi,
                 )
             group = {
                 "provider": prov,

@@ -22,6 +22,9 @@ class SearchReq(BaseModel):
         description="[(provider, collection), ...]",
     )
     min_overlap: float = 0.2
+    cloud_mode: Literal["scene", "aoi"] = Field(
+        "scene", description="scene=整景云量（快）；aoi=逐景读 QA 实测 AOI 云量（准，冷检索慢）"
+    )
 
     @field_validator("providers", mode="before")
     @classmethod

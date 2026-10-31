@@ -222,7 +222,7 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 | `scene_id` | — | 唯一 id，后续接口都用它 |
 | `datetime` | ISO8601 UTC | 成像时间 |
 | `cloud_cover` | 0–100 | 整景云量（`eo:cloud_cover`，185 km 级口径） |
-| `aoi_cloud` | 0–1 / `null` | AOI 内实测云+云影占比；`null`=无法实测 |
+| `aoi_cloud` | 0–1 / `null` | AOI 内实测云+云影占比；`null`=未做实测（`cloud_mode=scene` 时用 `cloud_cover` 兜底，前端显示为 `≈n%`） |
 | `overlap` | 0–1 | 景 footprint 与 AOI 的重叠占比 |
 | `tier` | `T1` / `T2` / `null` | Landsat Collection 2 级别（S2 为 null） |
 | `footprint` | GeoJSON | 景的真实覆盖范围（非矩形） |
@@ -280,6 +280,7 @@ data/
 | 项 | 做法 | 效果 |
 |---|---|---|
 | 检索缓存 | STAC 结果落 `data/index/search_cache.sqlite`，TTL 24 h | 同一 AOI 二次检索 **47.5 s → 0.1 s** |
+| 云量口径 | 默认 cloud_mode=scene（整景云量，1–3 s）；切 oi 才逐景读 QA 实测 | 想快用默认，想准再切 AOI |
 | 云量缓存 | AOI 实测云量持久化，重启不丢 | 重复检索零网络；只实测预筛后的前 20 景 |
 | 签名缓存 | SAS token 带过期时间复用，并发上限 4，429 按 `Retry-After` 退避 | 消除 Planetary Computer 限流风暴 |
 | 下载并发 | 顺序读时预取 8 块，全局并发上限 32 | 单连接被限速 17 KB/s → 实测 100 KB/s+ |

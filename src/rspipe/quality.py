@@ -213,6 +213,7 @@ def rank_scenes(
     min_overlap: float = 0.0,
     max_workers: int = 10,
     max_measure: int = 20,
+    measure_aoi: bool = True,
 ) -> list[RankedScene]:
     """按选景质量排序：Tier1 优先 > AOI 实测云量升序 > 重叠度降序。
 
@@ -246,14 +247,17 @@ def rank_scenes(
     targets = order[: max(1, min(max_measure, len(cand)))]
 
     clouds: list[float | None] = [None] * len(cand)
-    if len(targets) == 1:
-        clouds[targets[0]] = measure(cand[targets[0]][0])
-    else:
-        with ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="rsq") as ex:
-            for i, val in zip(
-                targets, ex.map(lambda i: measure(cand[i][0]), targets), strict=False
-            ):
-                clouds[i] = val
+    if measure_aoi:
+        if len(targets) == 1:
+            clouds[targets[0]] = measure(cand[targets[0]][0])
+        else:
+            with ThreadPoolExecutor(
+                max_workers=max(1, max_workers), thread_name_prefix="rsq"
+            ) as ex:
+                for i, val in zip(
+                    targets, ex.map(lambda i: measure(cand[i][0]), targets), strict=False
+                ):
+                    clouds[i] = val
 
     ranked: list[RankedScene] = []
     for (s, ov, tier), ac in zip(cand, clouds, strict=False):
