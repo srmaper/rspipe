@@ -74,10 +74,11 @@ onMounted(() => {
           type: 'raster',
           tiles: ['https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png'],
           tileSize: 256,
+          maxzoom: 18,
           attribution: '© Esri World_Imagery',
         },
-        anno: { type: 'raster', tiles: [TDT('cia')], tileSize: 256, attribution: '© 天地图 cia' },
-        label: { type: 'raster', tiles: [TDT('cva')], tileSize: 256, attribution: '© 天地图 cva' },
+        anno: { type: 'raster', tiles: [TDT('cia')], tileSize: 256, maxzoom: 18, attribution: '© 天地图 cia' },
+        label: { type: 'raster', tiles: [TDT('cva')], tileSize: 256, maxzoom: 18, attribution: '© 天地图 cva' },
         vbg: {
           type: 'vector',
           tiles: ['https://tiles.basemaps.cartocdn.com/vectortiles/carto.streets/v1/{z}/{x}/{y}.mvt'],
@@ -95,6 +96,7 @@ onMounted(() => {
       id: 'rsv1',
     },
     attributionControl: false,
+    maxZoom: 18,
     center: [104.0, 35.5],   // 中国全境
     zoom: 3.5,
   })
