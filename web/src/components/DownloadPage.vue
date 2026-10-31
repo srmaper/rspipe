@@ -56,6 +56,7 @@
             <div v-if="!groups.length" class="hint">先设置 AOI 并检索。结果按 Tier1 > AOI实测云量 > 覆盖度 排序。</div>
             <div v-for="g in groups" :key="g.provider + g.collection" class="group">
               <div class="group-title">{{ labelOf(g) }} <span class="muted">({{ g.kept }}/{{ g.total }})</span></div>
+              <div v-if="!g.kept && g.hint" class="hint" style="margin:4px 0 8px">{{ g.hint }}</div>
               <SceneCard
                 v-for="s in g.scenes"
                 :key="g.provider + s.scene_id"

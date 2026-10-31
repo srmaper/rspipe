@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 from datetime import date, datetime
 from pathlib import Path
@@ -139,6 +140,30 @@ def _parse_date(s: str | None) -> datetime | None:
     if not s:
         return None
     return datetime.combine(date.fromisoformat(s[:10]), datetime.min.time(), tzinfo=None)
+
+
+def _empty_hint(client, coll: str, bbox, sd, ed, cloud: float | None) -> str | None:
+    """检索为空时给一句可操作提示：放宽云量能拿到多少。
+
+    只在 0 结果时调用，多一次 STAC 查询（会进缓存），正常检索不受影响。
+    """
+    try:
+        loose = client.search(bbox=bbox, start=sd, end=ed, max_items=50)
+        loose = [s for s in loose if s.collection == coll]
+    except Exception:
+        return None
+    if not loose:
+        return "该区域该时段没有可用影像，试试扩大时间范围或换个区域"
+    clouds = [s.cloud_cover for s in loose if s.cloud_cover is not None]
+    if not clouds:
+        return "该区域该时段有影像，但没有云量信息，可放宽云量上限再试"
+    best = min(clouds)
+    if cloud is not None and best > cloud:
+        return (
+            f"该区域该时段最少的整景云量是 {best:.1f}%，"
+            f"当前上限 {cloud:.0f}% 过滤掉了全部 {len(loose)} 景；把上限放宽到 {math.ceil(best)}% 即可看到结果"
+        )
+    return f"该区域该时段有 {len(loose)} 景，但都不满足当前筛选条件"
 
 
 def _buffer_non_polygon(geom: dict, meters: float) -> dict:
@@ -300,6 +325,7 @@ def create_app() -> FastAPI:
                 "collection": coll,
                 "total": len(scenes),
                 "kept": len(ranked),
+                "hint": _empty_hint(client, coll, bbox, sd, ed, req.cloud) if not scenes else None,
                 "table": format_ranked(ranked[:20]),
                 "scenes": [
                     SceneOut(
