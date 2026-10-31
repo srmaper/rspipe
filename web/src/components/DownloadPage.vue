@@ -31,6 +31,7 @@
           ref="mapRef"
           :footprints="footprints"
           :selected-id="activeScene?.scene_id"
+          :selected-footprint="activeScene?.footprint"
           :preview-scene="previewLayer"
           @bbox="onBboxPick"
           @coord="onCoord"
@@ -348,6 +349,7 @@ async function onSearch(cfg) {
   if (areaBlocked()) return
   searching.value = true
   groups.value = []
+  activeScene.value = null   // 清掉上一次选中的蓝色 footprint
   logLn(`检索 ${cfg.start.slice(0,10)}~${cfg.end.slice(0,10)} 云≤${cfg.cloud}%`)
   try {
     const body = { ...cfg, bbox: bbox.value }

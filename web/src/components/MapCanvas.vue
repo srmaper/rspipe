@@ -22,6 +22,7 @@ const TDT = (key) =>
 const props = defineProps({
   footprints: Array,
   selectedId: String,
+  selectedFootprint: Object,   // 选中景的真实 footprint（蓝色高亮，切换即替换）
   previewScene: Object,
   tileTemplate: { type: String, default: '' },   // 自定义瓦片 URL 模板（分析页用）
 })
@@ -106,6 +107,7 @@ onMounted(() => {
   map.on('load', () => {
     injectCarto(map)
     setBasemap('imagery')  // 默认影像模式（矢量层已就位可即时切换）
+    if (props.selectedFootprint) setSelectedFootprint(props.selectedFootprint)
   })
   // ── 圈选事件绑定（对齐 tiles.html）：状态机在 setup 作用域，这里只挂 handler ──
   map.on('mousedown', e => {
@@ -219,14 +221,23 @@ function setAoiPolygon(geom) {
 function setFootprints(groups) {
   if (!map) return
   const fs = []
-  for (const g of groups || []) {
-    for (const s of g.scenes) {
-      if (!s.footprint) continue
-      fs.push({
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: s.footprint.coordinates ? [s.footprint.coordinates[0]] : [] },
-        properties: { id: s.scene_id, provider: g.provider, label: s.scene_id.slice(0, 18) },
-      })
+  const push = (s, provider) => {
+    if (!s || !s.footprint) return
+    const geom = s.footprint.type
+      ? s.footprint
+      : { type: 'Polygon', coordinates: s.footprint.coordinates ? [s.footprint.coordinates[0]] : [] }
+    fs.push({
+      type: 'Feature',
+      geometry: geom,
+      properties: { id: s.scene_id, provider, label: (s.scene_id || '').slice(0, 18) },
+    })
+  }
+  // 兼容两种入参：分组数组 [{scenes: []}] 或扁平景数组 [{scene_id}]
+  for (const item of groups || []) {
+    if (Array.isArray(item?.scenes)) {
+      for (const s of item.scenes) push(s, item.provider)
+    } else {
+      push(item, item?.provider)
     }
   }
   if (!map.getSource('fps')) {
@@ -239,6 +250,33 @@ function setFootprints(groups) {
   } else {
     map.getSource('fps').setData({ type: 'FeatureCollection', features: fs })
   }
+}
+
+// ── 选中景的真实 footprint（蓝色）：切换选择时先销毁旧图层，避免叠加 ──
+function clearSelectedFootprint() {
+  if (!map) return
+  try { if (map.getLayer('selfp-fill')) map.removeLayer('selfp-fill') } catch (e) {}
+  try { if (map.getLayer('selfp-line')) map.removeLayer('selfp-line') } catch (e) {}
+  try { if (map.getSource('selfp')) map.removeSource('selfp') } catch (e) {}
+}
+
+function setSelectedFootprint(geom) {
+  if (!map) return
+  clearSelectedFootprint()
+  if (!geom || !geom.type) return
+  map.addSource('selfp', {
+    type: 'geojson',
+    data: { type: 'Feature', geometry: geom, properties: {} },
+  })
+  map.addLayer({
+    id: 'selfp-fill', type: 'fill', source: 'selfp',
+    paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.12 },
+  })
+  map.addLayer({
+    id: 'selfp-line', type: 'line', source: 'selfp',
+    paint: { 'line-color': '#2563eb', 'line-width': 3, 'line-opacity': 1 },
+  })
+  restackBusinessLayers(map)
 }
 
 let previewId = null
@@ -275,6 +313,7 @@ function clearPreview() {
 }
 
 watch(() => props.footprints, v => setFootprints(v))
+watch(() => props.selectedFootprint, g => setSelectedFootprint(g))
 watch(
   () => props.selectedId,
   id => {
@@ -312,7 +351,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['preview', 'pext-line', 'fps-line', 'fps-fill', 'aoi-line']
+  const top = ['preview', 'pext-line', 'fps-line', 'fps-fill', 'selfp-fill', 'selfp-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
