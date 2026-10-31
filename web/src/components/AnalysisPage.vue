@@ -98,16 +98,13 @@
 
       <!-- 右栏 -->
       <div id="right">
-        <div class="card" id="tour-result" style="flex:none;display:flex;flex-direction:column">
+        <div class="card" id="tour-result" style="flex:1;min-height:0;display:flex;flex-direction:column">
           <h3>分析结果</h3>
           <div class="reslist">
             <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
             <table v-else class="kv">
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
-          </div>
-          <div v-if="stats" class="row" style="margin-top:10px">
-            <button class="primary" style="width:100%" @click="downloadResult()">下载</button>
           </div>
         </div>
 
@@ -131,6 +128,7 @@
               <div class="row" style="margin-top:6px">
                 <button @click="loadHistory(h)">加载</button>
                 <button @click="downloadResult(h.key)">下载</button>
+                <button class="danger" @click="deleteHistory(h)">删除</button>
               </div>
             </div>
           </div>
@@ -138,6 +136,7 @@
       </div>
     </div>
 
+    <MessageBox ref="msgBox" />
     <GuideModal v-if="guideOpen" @close="guideOpen = false" />
     <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" @close="tourOpen = false" />
     <SwipeCompare
@@ -156,6 +155,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import MapCanvas from './MapCanvas.vue'
+import MessageBox from './MessageBox.vue'
 import GuideModal from './GuideModal.vue'
 import SwipeCompare from './SwipeCompare.vue'
 import TourGuide from './TourGuide.vue'
@@ -225,6 +225,8 @@ function logLn(s) {
 const swipe = ref(null)
 const extentVisible = ref(false)   // 与 MapCanvas 的默认值一致：范围框默认关
 const history = ref([])
+const msgBox = ref(null)
+function showToast(m) { msgBox.value?.toast(m) }
 const vectorOn = ref(false)
 const vectorBusy = ref(false)
 const vectorKey = ref('')
@@ -510,6 +512,30 @@ function loadHistory(h) {
   vectorOp.value = isChange ? 'abs' : 'above'
   if (vectorOn.value) loadVector()
   logLn(`载入历史分析 ${h.key}`)
+}
+async function deleteHistory(h) {
+  const yes = await msgBox.value?.confirm({
+    title: '删除分析结果',
+    message: `将删除 ${h.key} 的 ${h.index.toUpperCase()} 结果（栅格 + 统计 + 快视图），不可恢复。`,
+    okText: '删除',
+  })
+  if (!yes) return
+  try {
+    const r = await fetch(`/api/analysis/${encodeURIComponent(h.key)}`, { method: 'DELETE' })
+    if (!r.ok) {
+      showToast('删除失败：' + (await r.text()).slice(0, 80))
+      return
+    }
+    if (preview.value?.scene_id === h.key) {
+      preview.value = null
+      stats.value = null
+      mapRef.value?.clearPreview()
+    }
+    logLn(`已删除分析结果 ${h.key}`)
+    loadHistoryList()
+  } catch (e) {
+    showToast('删除失败: ' + e)
+  }
 }
 function downloadResult(keyArg) {
   const key = typeof keyArg === 'string' ? keyArg : preview.value?.scene_id

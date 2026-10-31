@@ -622,6 +622,20 @@ def create_app() -> FastAPI:
 
         return {"items": list_history(Path(cfg.data_root))}
 
+    @app.delete("/api/analysis/{key}")
+    def api_analysis_delete(key: str) -> dict:
+        """删除一次分析结果（栅格 + 统计 + 快视图 + run.json）。"""
+        import shutil
+
+        safe = "".join(ch for ch in key if ch.isalnum() or ch in "._-")
+        if not safe or safe != key:
+            raise HTTPException(422, "非法的分析结果标识")
+        d = Path(cfg.data_root) / "analysis" / safe
+        if not d.is_dir():
+            raise HTTPException(404, f"没有该分析结果：{safe}")
+        shutil.rmtree(d, ignore_errors=True)
+        return {"ok": True, "key": safe}
+
     @app.get("/api/analysis/export/{key}")
     def api_analysis_export(key: str):
         """下载整套分析结果（zip：栅格 + 统计 json + 快视图 + README）。"""
