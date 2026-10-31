@@ -109,9 +109,7 @@
             </table>
           </div>
           <div v-if="stats" class="row" style="margin-top:10px">
-            <button class="primary" style="width:100%" @click="downloadResult">
-              下载分析结果（zip）
-            </button>
+            <button class="primary" style="width:100%" @click="downloadResult">下载</button>
           </div>
         </div>
       </div>
