@@ -220,7 +220,12 @@ function areaBlocked() {
 }
 
 let wsJobWatchers = {}
+// 任意点击先清掉蓝色景范围，点景卡片时再由 select 重新画
+function clearFootprintOnClick() {
+  if (activeScene.value) activeScene.value = null
+}
 onMounted(async () => {
+  document.addEventListener('click', clearFootprintOnClick, true)
   const r = await fetch('/api/aoi')
   aois.value = await r.json()
   // 进度轮询（1s），替代 WS 的简单实现
@@ -232,7 +237,9 @@ onMounted(async () => {
     if (okRaw.size) rawOkIds.value = new Set([...rawOkIds.value, ...okRaw])
   }, 1500)
 })
-onBeforeUnmount(() => {})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', clearFootprintOnClick, true)
+})
 
 function applyFetchedAoi(a) {
   const g = a.geometry
@@ -433,7 +440,6 @@ function startPreview(s) {
   // 数据实际范围（瓦片只覆盖这块）——source.bounds 必须用它，否则 MapLibre 会把瓦片拉伸错位
   const dataBounds = s.raw_bounds || s.cog_bounds || bbox.value || sceneBounds
   previewLayer.value = { ...s, provider, collection, bounds: dataBounds, ready: true }
-  activeScene.value = s
   channels.value = 'rgb'
   if (dataBounds) mapRef.value?.fitBbox(dataBounds)
   logLn(`预览 ${s.scene_id} · 缩放到${s.raw_bounds || s.cog_bounds ? '裁剪范围' : bbox.value ? ' AOI' : '景范围'}`)
