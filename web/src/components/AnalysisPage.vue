@@ -153,7 +153,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import MapCanvas from './MapCanvas.vue'
 import MessageBox from './MessageBox.vue'
 import GuideModal from './GuideModal.vue'
@@ -492,13 +492,23 @@ function histLine(h) {
   }
   return `均值 ${s.mean ?? '-'} · 面积 ${s.area_km2 ?? '-'} km² · 阈值 ${thr}`
 }
-function loadHistory(h) {
+async function loadHistory(h) {
   const isChange = h.mode === 'change' || String(h.index).endsWith('_change')
   const base = String(h.index).replace(/_change$/, '')
   const name = isChange ? `${base}_change` : base
+
+  // 左侧所有属性都跟着历史记录走
+  mode.value = isChange ? 'change' : 'single'
+  sceneA.value = h.scene_a || ''
+  sceneB.value = isChange ? h.scene_b || '' : ''
   index.value = base
+  await nextTick()   // 等 mode/index 的 watcher 跑完，再写回真实阈值
+
   const thr = h.threshold ?? (h.stats || {}).threshold
   if (thr !== null && thr !== undefined) threshold.value = thr
+  else applyDefaultThreshold()
+
+  resultVisible.value = true
   stats.value = { ...(h.stats || {}) }
   tileTemplate.value = `/api/analysis/tiles/${h.key}/${name}/{z}/{x}/{y}.png`
   const bounds = h.stats?.bounds
