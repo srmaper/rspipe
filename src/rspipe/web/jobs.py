@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rspipe.errors import JobCancelledError
+
 log = logging.getLogger(__name__)
 
 
@@ -74,6 +76,7 @@ class JobCenter:
         self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="rsw")
         self._lock = threading.Lock()
         self._locks: dict[str, threading.Lock] = {}
+        self._cancels: dict[str, threading.Event] = {}
         self._db_init()
         self._db_load()
 
@@ -217,8 +220,36 @@ class JobCenter:
             detail={"bands": list(req.bands)} if req.bands else {},
         )
         self.jobs[job.id] = job
+        self._cancels[job.id] = threading.Event()
         self._pool.submit(self._run, job)
         return job
+
+    def pause(self, job_id: str) -> bool:
+        """请求暂停：置取消位，下载线程会在下一个分片退出（已完成波段保留）。"""
+        job = self.jobs.get(job_id)
+        if job is None or job.status not in ("queued", "running"):
+            return False
+        ev = self._cancels.get(job_id)
+        if ev is not None:
+            ev.set()
+        with self._lock:
+            job.status = "paused"
+            job.message = "已暂停（可继续，已完成波段会跳过）"
+        self._db_save(job)
+        return True
+
+    def resume(self, job_id: str) -> bool:
+        """继续：清取消位重新入队，已存在的波段文件会被跳过。"""
+        job = self.jobs.get(job_id)
+        if job is None or job.status not in ("paused", "error"):
+            return False
+        self._cancels[job_id] = threading.Event()
+        with self._lock:
+            job.status = "queued"
+            job.message = "继续下载…"
+        self._db_save(job)
+        self._pool.submit(self._run, job)
+        return True
 
     def _scene_lock(self, scene_id: str) -> threading.Lock:
         with self._lock:
@@ -267,6 +298,7 @@ class JobCenter:
                     tuple(job.aoi_bbox),
                     keys=job.detail.get("bands"),
                     progress=lambda f, m: self._prog(job, f, m),
+                    should_stop=self._should_stop(job),
                 )
                 job.status = "ok"
                 job.progress = 1.0
@@ -317,10 +349,20 @@ class JobCenter:
                     job.progress = 1.0
                     job.detail = {"cog": str(result.cog_path or "")}
                     job.message = "成果 COG 就绪"
+        except JobCancelledError:
+            job.status = "paused"
+            job.message = "已暂停（可继续，已完成波段会跳过）"
+            log.info("job %s paused", job.id)
         except Exception as exc:
             job.status = "error"
             job.message = _friendly_error(f"{type(exc).__name__}: {exc}")
             log.exception("job %s failed", job.id)
+
+    def _should_stop(self, job: Job):
+        ev = self._cancels.get(job.id)
+        if ev is None:
+            return None
+        return ev.is_set
 
     def _prog(self, job: Job, f: float, m: str) -> None:
         with self._lock:

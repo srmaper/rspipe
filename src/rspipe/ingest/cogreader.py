@@ -151,12 +151,18 @@ class LevelInfo:
 class CogReader:
     """只按需拉取 COG 瓦片的窗口读取器。"""
 
-    def __init__(self, url_or_file: str | RangeFile, *, block_size: int = 1 << 18) -> None:
+    def __init__(
+        self,
+        url_or_file: str | RangeFile,
+        *,
+        block_size: int = 1 << 18,
+        abort_check: Any = None,
+    ) -> None:
         if isinstance(url_or_file, RangeFile):
             self._rf = url_or_file
             self._owns = False
         else:
-            self._rf = RangeFile(url_or_file, block_size=block_size)
+            self._rf = RangeFile(url_or_file, block_size=block_size, abort_check=abort_check)
             self._owns = True
         self.info = self._parse()
         self._tile_cache: dict[int, np.ndarray] = {}

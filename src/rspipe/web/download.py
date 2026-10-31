@@ -27,6 +27,7 @@ def download_scene_raw(
     progress=None,
     block_size=1 << 19,
     workers=6,
+    should_stop=None,
 ) -> Path:
     """raw AOI 裁剪下载（512KB 块 + RangeFile 预取并发，已存在文件跳过）。
 
@@ -73,7 +74,7 @@ def download_scene_raw(
             return dest
         asset = scene.asset_by_key(key)
         href = sign_href(asset.href) if needs_signing(asset.href) else asset.href
-        with CogReader(href, block_size=block_size) as r:
+        with CogReader(href, block_size=block_size, abort_check=should_stop) as r:
             col, row, w, h = r.window_for_bbox(tuple(bbox))
             if w <= 0 or h <= 0:
                 raise RuntimeError("AOI 与该景范围无交集，请重新圈选")

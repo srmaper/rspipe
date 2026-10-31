@@ -18,13 +18,14 @@ import io
 import os
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from rspipe.errors import DownloadError
+from rspipe.errors import DownloadError, JobCancelledError
 from rspipe.logging import get_logger
 
 log = get_logger("rspipe.ingest.rangefile")
@@ -62,6 +63,7 @@ class RangeFile(io.RawIOBase):
         max_cached_blocks: int = DEFAULT_CACHE_BLOCKS,
         client: httpx.Client | None = None,
         prefetch: int = DEFAULT_PREFETCH,
+        abort_check: Callable[[], bool] | None = None,
     ) -> None:
         self.url = url
         self._is_remote = url.startswith(("http://", "https://"))
@@ -69,6 +71,7 @@ class RangeFile(io.RawIOBase):
         self.block_size = int(block_size)
         self.max_cached_blocks = int(max_cached_blocks)
         self.prefetch = int(prefetch)
+        self._abort_check = abort_check
         self._client = client or httpx.Client(
             timeout=httpx.Timeout(connect=15.0, read=30.0, write=30.0, pool=30.0),
             follow_redirects=True,
@@ -261,6 +264,8 @@ class RangeFile(io.RawIOBase):
                             raise last_exc
                         continue
                     for chunk in resp.iter_bytes(65536):
+                        if self._abort_check is not None and self._abort_check():
+                            raise JobCancelledError("job paused")
                         buf.extend(chunk)
                         if progress_hook is not None:
                             with contextlib.suppress(Exception):

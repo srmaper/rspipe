@@ -73,7 +73,8 @@
           </div>
         </div>
         <div id="tour-tasks">
-          <TasksCard :jobs="jobs" @preview="onTaskPreview" @meta="onTaskMeta" @download="onTaskDownload" @delete="onTaskDelete" />
+          <TasksCard :jobs="jobs" @preview="onTaskPreview" @meta="onTaskMeta" @download="onTaskDownload"
+                     @delete="onTaskDelete" @pause="onTaskPause" @resume="onTaskResume" />
         </div>
       </div>
     </div>
@@ -280,7 +281,23 @@ async function onTaskPreview(j) {
   startPreview(s)
 }
 async function onTaskMeta(j) {
-  await selectScene({ scene_id: j.scene_id, provider: j.provider, collection: j.collection })
+  const s = { scene_id: j.scene_id, provider: j.provider, collection: j.collection }
+  try {
+    const r = await fetch(`/api/scenes/${j.provider}/${encodeURIComponent(j.scene_id)}`)
+    detail.value = r.ok ? await r.json() : s
+  } catch { detail.value = s }
+}
+async function onTaskPause(j) {
+  try {
+    const r = await fetch(`/api/jobs/${j.id}/pause`, { method: 'POST' })
+    if (!r.ok) { showToast('暂停失败：任务可能已结束') } else { logLn(`已暂停 ${j.scene_id}`) }
+  } catch (e) { showToast('暂停失败: ' + e) }
+}
+async function onTaskResume(j) {
+  try {
+    const r = await fetch(`/api/jobs/${j.id}/resume`, { method: 'POST' })
+    if (!r.ok) { showToast('继续失败：任务状态不支持') } else { logLn(`继续下载 ${j.scene_id}`) }
+  } catch (e) { showToast('继续失败: ' + e) }
 }
 async function onTaskDownload(j) {
   showToast('正在打包…')

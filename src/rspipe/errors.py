@@ -27,6 +27,10 @@ class DownloadError(ProviderError):
     """下载失败（含完整性校验失败）。"""
 
 
+class JobCancelledError(RspipeError):
+    """任务被用户暂停/取消（保留已完成产物，可续传）。"""
+
+
 class UnpackError(RspipeError):
     """归档解包或产品结构解析失败。"""
 

@@ -411,6 +411,20 @@ def create_app() -> FastAPI:
     def api_jobs_list() -> list[dict]:
         return center.snapshot()
 
+    @app.post("/api/jobs/{job_id}/pause")
+    def api_job_pause(job_id: str) -> dict:
+        """暂停运行中的任务（已完成波段保留，可续传）。"""
+        if not center.pause(job_id):
+            raise HTTPException(409, "任务不在运行中，无法暂停")
+        return {"ok": True}
+
+    @app.post("/api/jobs/{job_id}/resume")
+    def api_job_resume(job_id: str) -> dict:
+        """继续已暂停/失败的任务（已存在的波段文件会跳过）。"""
+        if not center.resume(job_id):
+            raise HTTPException(409, "任务不可继续（仅暂停/失败的任务可继续）")
+        return {"ok": True}
+
     @app.delete("/api/jobs/{job_id}")
     def api_job_delete(job_id: str) -> dict:
         """终态任务的删除：清该景全部本地产物 + 从任务列表移除。"""

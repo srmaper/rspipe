@@ -11,11 +11,14 @@
         </div>
         <div class="pbar"><div :style="{ width: (j.progress || 0) * 100 + '%' }"></div></div>
         <div v-if="lineText(j)" class="hint">{{ lineText(j) }}</div>
-        <div v-if="j.status === 'ok' || j.status === 'error'" class="row act" style="margin-top:6px">
-          <button @click="$emit('preview', j)">预览</button>
-          <button @click="$emit('meta', j)">元数据</button>
-          <button @click="$emit('download', j)">下载</button>
-          <button class="danger" @click="$emit('delete', j)">删除</button>
+        <div class="row act" style="margin-top:6px">
+          <button v-if="j.status === 'running'" @click="$emit('pause', j)">暂停</button>
+          <button v-else-if="j.status === 'paused' || j.status === 'error'" @click="$emit('resume', j)">继续</button>
+          <button v-else-if="j.status === 'ok'" @click="$emit('preview', j)">预览</button>
+          <button v-else disabled>排队中</button>
+          <button v-if="j.status === 'ok'" @click="$emit('meta', j)">元数据</button>
+          <button v-if="j.status === 'ok'" @click="$emit('download', j)">下载</button>
+          <button v-if="j.status !== 'running' && j.status !== 'queued'" class="danger" @click="$emit('delete', j)">删除</button>
         </div>
       </div>
     </div>
@@ -24,9 +27,12 @@
 
 <script setup>
 defineProps({ jobs: Array })
-defineEmits(['preview', 'meta', 'download', 'delete'])
-const statusText = s => ({ queued: '排队', running: '运行', ok: '完成', error: '失败' }[s] || s)
-const dotColor = s => ({ ok: '#16a34a', running: '#2563eb', error: '#dc2626', queued: '#aab2bd' }[s] || '#aab2bd')
+defineEmits(['preview', 'meta', 'download', 'delete', 'pause', 'resume'])
+const statusText = s =>
+  ({ queued: '排队', running: '运行', paused: '已暂停', ok: '完成', error: '失败' }[s] || s)
+const dotColor = s =>
+  ({ ok: '#16a34a', running: '#2563eb', paused: '#d97706', error: '#dc2626', queued: '#aab2bd' }[s] ||
+    '#aab2bd')
 
 // 第二行：只在有信息量时显示（进度提示 / 失败原因 / 完成后的波段数与体积）
 function lineText(j) {
