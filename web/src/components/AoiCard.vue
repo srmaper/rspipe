@@ -9,14 +9,11 @@
       <button :class="{ primary: active === 'search' }" @click="$emit('set', 'search')">📍 位置搜索</button>
       <button class="danger" :disabled="!busy" @click="$emit('clear')">清除</button>
     </div>
-    <div class="rbox" :class="{ bad: !coords, over: overLimit }">
-      <template v-if="coords">
-        范围 <b>{{ aoiName || '手动圈选' }}</b><br>
-        bbox {{ coords.map(v => v.toFixed(2)).join(', ') }}<br>
-        面积 <b>{{ areaText }}</b> km²
-        <span class="muted">/ 上限 {{ limit }} km²</span>
-      </template>
-      <template v-else>范围：框选矩形 / 绘制多边形，或打开位置搜索输入地名</template>
+    <div class="rbox" v-if="coords" :class="{ over: overLimit }">
+      范围 <b>{{ aoiName || '手动圈选' }}</b><br>
+      bbox {{ coords.map(v => v.toFixed(2)).join(', ') }}<br>
+      面积 <b>{{ areaText }}</b> km²
+      <span class="muted">/ 上限 {{ limit }} km²</span>
     </div>
   </div>
 </template>
