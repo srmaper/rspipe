@@ -13,7 +13,7 @@
 
 ## 下载安装（Windows，免环境）
 
-**[⬇ rspipe-0.1.0-setup.exe](https://github.com/srmaper/rspipe/releases/download/v0.1.0/rspipe-0.1.0-setup.exe)** · 142 MB · 免 Python / Node / GDAL
+**[⬇ 下载最新安装包](https://github.com/srmaper/rspipe/releases/latest)** · 免 Python / Node / GDAL
 
 双击安装即可，无需管理员权限；装到 `%LOCALAPPDATA%\Programs\rspipe`，
 数据保存在 `%LOCALAPPDATA%\rspipe\data`（卸载不删数据）。
