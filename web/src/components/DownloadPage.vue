@@ -43,7 +43,6 @@
           <button v-for="c in channelsList" :key="c.v" :class="{ primary: channels === c.v }" @click="setChannels(c.v)">
             {{ c.label }}
           </button>
-          <button :class="{ primary: extentVisible }" @click="toggleExtent">范围</button>
           <button @click="clearPreview">关闭</button>
         </div>
       </div>
@@ -126,7 +125,6 @@ const aoiTool = ref(null)       // 'rect' | 'poly' | 'search' | null —— 三�
 const activeScene = ref(null)
 const previewLayer = ref(null)
 const channels = ref('rgb')
-const extentVisible = ref(true)
 const channelsList = [
   { v: 'rgb', label: '真彩色' },
   { v: 'false', label: '假彩 NIR' },
@@ -483,10 +481,6 @@ async function startJob(s, type, onOk, bands) {
       showToast(mine.message)
     }
   }, 1200)
-}
-function toggleExtent() {
-  extentVisible.value = !extentVisible.value
-  mapRef.value?.setExtentVisible(extentVisible.value)
 }
 function setChannels(v) {
   channels.value = v

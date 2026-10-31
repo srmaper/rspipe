@@ -152,42 +152,6 @@ onMounted(() => {
 onBeforeUnmount(() => map && map.remove())
 
 
-// ── 预览影像范围（蓝色）与下载 AOI（黄色）是两个独立图层 ──
-let extentVisible = true
-
-function setPreviewExtent(bounds, visible = true) {
-  if (!map || !bounds || bounds.length !== 4) return
-  const [w, s0, e, n] = bounds
-  const ring = [[w, s0], [e, s0], [e, n], [w, n], [w, s0]]
-  const data = {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [ring] },
-    properties: {},
-  }
-  extentVisible = visible
-  if (!map.getSource('pext')) {
-    map.addSource('pext', { type: 'geojson', data })
-    map.addLayer({
-      id: 'pext-line', type: 'line', source: 'pext',
-      paint: { 'line-color': '#dc2626', 'line-width': 4, 'line-opacity': 1, 'line-offset': -4 },
-    })
-  } else {
-    map.getSource('pext').setData(data)
-  }
-  try { map.setLayoutProperty('pext-line', 'visibility', visible ? 'visible' : 'none') } catch (e) {}
-  restackBusinessLayers(map)
-}
-
-function setExtentVisible(visible) {
-  extentVisible = visible
-  try {
-    if (map.getLayer('pext-line')) {
-      map.setLayoutProperty('pext-line', 'visibility', visible ? 'visible' : 'none')
-    }
-  } catch (e) { /* 尚未创建 */ }
-  restackBusinessLayers(map)
-}
-
 function setAoiVisible(visible) {
   if (!map) return
   try {
@@ -261,7 +225,6 @@ function setPreviewTiles(sceneId, channels, provider, collection, bounds) {
   if (bounds && bounds.length === 4) src.bounds = bounds  // 限定请求范围=景范围
   map.addSource('preview', src)
   map.addLayer({ id: 'preview', type: 'raster', source: 'preview', paint: { 'raster-opacity': 1 } })
-  if (bounds && bounds.length === 4) setPreviewExtent(bounds, extentVisible)
   restackBusinessLayers(map)   // 下载 AOI 始终压在最顶
   // 瓦片异步装载后个别实现会按加载顺序重建绘制队列，idle 时再归层一次防漂移
   map.once('idle', () => restackBusinessLayers(map))
@@ -270,8 +233,6 @@ function clearPreview() {
   if (!map) return
   if (map.getLayer('preview')) map.removeLayer('preview')
   if (map.getSource('preview')) map.removeSource('preview')
-  if (map.getLayer('pext-line')) map.removeLayer('pext-line')
-  if (map.getSource('pext')) map.removeSource('pext')
   previewId = null
 }
 
@@ -306,7 +267,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['preview', 'pext-line', 'selfp-fill', 'selfp-line', 'aoi-line']
+  const top = ['preview', 'selfp-fill', 'selfp-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
@@ -342,7 +303,7 @@ function viewportBbox() {
 }
 
 defineExpose({
-  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, clearPreview, setBasemap, setDrawMode, viewportBbox,
+  fitBbox, setAoiPolygon, setAoiVisible, setPreviewTiles, clearPreview, setBasemap, setDrawMode, viewportBbox,
 })
 </script>
 
