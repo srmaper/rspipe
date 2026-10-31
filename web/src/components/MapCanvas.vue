@@ -20,8 +20,6 @@ const TDT = (key) =>
   + `&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=85c9d12d5d691d168ba5cb6ecaa749eb`
 
 const props = defineProps({
-  footprints: Array,
-  selectedId: String,
   selectedFootprint: Object,   // 选中景的真实 footprint（蓝色高亮，切换即替换）
   previewScene: Object,
   tileTemplate: { type: String, default: '' },   // 自定义瓦片 URL 模板（分析页用）
@@ -31,7 +29,6 @@ const el = ref(null)
 const basemap = ref('imagery')
 const coordText = ref('–')
 let map = null
-let hovered = null
 
 // ── 圈选状态机（setup 作用域：defineExpose 直接引用 → rect/poly 一套） ──
 let drawMode = null        // 'rect' | 'poly' | null
@@ -218,40 +215,6 @@ function setAoiPolygon(geom) {
     map.getSource('aoi').setData(data)
   }
 }
-function setFootprints(groups) {
-  if (!map) return
-  const fs = []
-  const push = (s, provider) => {
-    if (!s || !s.footprint) return
-    const geom = s.footprint.type
-      ? s.footprint
-      : { type: 'Polygon', coordinates: s.footprint.coordinates ? [s.footprint.coordinates[0]] : [] }
-    fs.push({
-      type: 'Feature',
-      geometry: geom,
-      properties: { id: s.scene_id, provider, label: (s.scene_id || '').slice(0, 18) },
-    })
-  }
-  // 兼容两种入参：分组数组 [{scenes: []}] 或扁平景数组 [{scene_id}]
-  for (const item of groups || []) {
-    if (Array.isArray(item?.scenes)) {
-      for (const s of item.scenes) push(s, item.provider)
-    } else {
-      push(item, item?.provider)
-    }
-  }
-  if (!map.getSource('fps')) {
-    map.addSource('fps', { type: 'geojson', data: { type: 'FeatureCollection', features: fs } })
-    map.addLayer({
-      id: 'fps-fill', type: 'fill', source: 'fps',
-      paint: { 'fill-color': '#38bdf8', 'fill-opacity': ['case', ['==', ['get', 'id'], ['to-string', hovered || '']], 0.25, 0.08] },
-    })
-    map.addLayer({ id: 'fps-line', type: 'line', source: 'fps', paint: { 'line-color': '#38bdf8', 'line-width': 1, 'line-opacity': 0.8 } })
-  } else {
-    map.getSource('fps').setData({ type: 'FeatureCollection', features: fs })
-  }
-}
-
 // ── 选中景的真实 footprint（蓝色）：切换选择时先销毁旧图层，避免叠加 ──
 function clearSelectedFootprint() {
   if (!map) return
@@ -312,15 +275,7 @@ function clearPreview() {
   previewId = null
 }
 
-watch(() => props.footprints, v => setFootprints(v))
 watch(() => props.selectedFootprint, g => setSelectedFootprint(g))
-watch(
-  () => props.selectedId,
-  id => {
-    hovered = id
-    setFootprints(props.footprints)
-  },
-)
 watch(
   () => props.previewScene,
   s => {
@@ -351,7 +306,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['preview', 'pext-line', 'fps-line', 'fps-fill', 'selfp-fill', 'selfp-line', 'aoi-line']
+  const top = ['preview', 'pext-line', 'selfp-fill', 'selfp-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
@@ -387,7 +342,7 @@ function viewportBbox() {
 }
 
 defineExpose({
-  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setFootprints, setPreviewTiles, clearPreview, setBasemap, setDrawMode, viewportBbox,
+  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, clearPreview, setBasemap, setDrawMode, viewportBbox,
 })
 </script>
 

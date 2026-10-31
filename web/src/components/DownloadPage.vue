@@ -29,8 +29,6 @@
       <div id="center" data-tour="map">
         <MapCanvas
           ref="mapRef"
-          :footprints="footprints"
-          :selected-id="activeScene?.scene_id"
           :selected-footprint="activeScene?.footprint"
           :preview-scene="previewLayer"
           @bbox="onBboxPick"
@@ -108,11 +106,6 @@ import TasksCard from './TasksCard.vue'
 
 const mapRef = ref(null)
 const groups = ref([])
-const footprints = computed(() => {
-  const fs = []
-  for (const g of groups.value) for (const s of g.scenes) fs.push(s)
-  return fs
-})
 const searching = ref(false)
 const rawOkIds = ref(new Set())   // raw 下载完成的景 id —— 之后才允许"生成预览"
 const logs = ref([])
@@ -391,13 +384,8 @@ async function addrSearch() {
     showToast('搜索失败: ' + (e.message || e))
   }
 }
-async function selectScene(s) {
+function selectScene(s) {
   activeScene.value = s
-  detail.value = null
-  try {
-    const r = await fetch(`/api/scenes/${s.provider}/${encodeURIComponent(s.scene_id)}`)
-    detail.value = await r.json()
-  } catch { detail.value = s }
 }
 function ensureBbox() {
   if (bbox.value) return true
