@@ -76,10 +76,6 @@
           <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
           <div class="hint" style="white-space: pre-line">{{ legendNote }}</div>
         </div>
-        <div class="card logbox" id="tour-log">
-          <h3>日志</h3>
-          <div class="log" ref="logEl">{{ logs.join('\n') }}</div>
-        </div>
 
       </div>
 
@@ -217,11 +213,6 @@ const TOUR_STEPS = [
     title: '分析结果',
     text: '这里显示统计结果表：均值、中位数、P10/P90、有效面积与占比、超阈值面积等；结果栅格保存在 data/analysis。',
   },
-  {
-    selector: '#tour-log',
-    title: '日志',
-    text: '记录每次计算的时间、指数、完成情况与失败原因，便于回溯。',
-  },
 ]
 const resultVisible = ref(true)
 const indexGroups = computed(() =>
@@ -230,7 +221,6 @@ const indexGroups = computed(() =>
 )
 const comparing = ref(false)
 const logs = ref([])
-const logEl = ref(null)
 
 function goDownload() {
   location.hash = '#/download'
@@ -238,9 +228,7 @@ function goDownload() {
 function logLn(s) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${s}`)
   if (logs.value.length > 300) logs.value = logs.value.slice(-200)
-  requestAnimationFrame(() => {
-    if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight
-  })
+  console.debug('[rspipe]', s)
 }
 const swipe = ref(null)
 const history = ref([])
@@ -660,13 +648,6 @@ onMounted(async () => {
 #center { flex: 1; position: relative; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
 #right { width: 330px; flex: none; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
 .reslist { flex: 1; min-height: 0; overflow: auto; }
-.logbox { flex: none; height: 200px; display: flex; flex-direction: column; }
-.log {
-  flex: 1; min-height: 0; overflow: auto;
-  background: #12161d; color: #c8d3e0;
-  font: 11px/1.55 Consolas, "Microsoft YaHei UI", monospace;
-  padding: 8px 10px; border-radius: 10px; white-space: pre-wrap;
-}
 .guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
 .hist {
   border: 1px solid var(--line); border-radius: 10px;

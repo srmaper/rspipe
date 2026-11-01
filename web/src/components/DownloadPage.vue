@@ -20,10 +20,6 @@
         <div id="tour-search">
           <SearchCard v-model:cfg="sCfg" :loading="searching" :bbox-ready="!!bbox" @search="onSearch" />
         </div>
-            <div class="card" id="logbox">
-          <h3>日志</h3>
-          <div id="log" ref="logEl">{{ logs.join('\n') }}</div>
-        </div>
       </div>
 
       <!-- 中央地图 -->
@@ -114,7 +110,6 @@ const groups = ref([])
 const searching = ref(false)
 const rawOkIds = ref(new Set())   // raw 下载完成的景 id —— 之后才允许"生成预览"
 const logs = ref([])
-const logEl = ref(null)
 function toggleAoiLayer() {
   aoiVisible.value = !aoiVisible.value
   mapRef.value?.setAoiVisible(aoiVisible.value)
@@ -124,8 +119,8 @@ function goAnalysis() {
 }
 function logLn(s) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${s}`)
-  // 最新日志滚动到底部
-  requestAnimationFrame(() => { if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight })
+  if (logs.value.length > 300) logs.value = logs.value.slice(-200)
+  console.debug('[rspipe]', s)
 }
 
 const bbox = ref(null)
@@ -631,13 +626,6 @@ defineEmits(['home'])
 .scenelist { flex: 1; min-height: 0; overflow: auto; }
 .group { margin-bottom: 12px; }
 .group-title { font-size: 12px; font-weight: 600; margin: 8px 0 6px; color: var(--accent); }
-#log {
-  flex: 1; min-height: 140px; max-height: 190px; overflow: auto;
-  background: #12161d; color: #c8d3e0;
-  font: 11px/1.55 Consolas, "Microsoft YaHei UI", monospace;
-  padding: 8px 10px; border-radius: 10px; white-space: pre-wrap;
-}
-#logbox { flex: none; height: 210px; display: flex; flex-direction: column; }
 #coords { position: absolute; z-index: 30; left: 50%; bottom: 12px; transform: translateX(-50%); }
 #msg {
   position: absolute; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%);
