@@ -98,7 +98,7 @@ onMounted(() => {
     attributionControl: false,
     maxZoom: 18,
     center: [104.0, 35.5],   // 中国全境
-    zoom: 3.5,
+    zoom: 3,
   })
   map.addControl(new maplibregl.NavigationControl(), 'top-right')
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), 'bottom-left')
