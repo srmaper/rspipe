@@ -351,7 +351,10 @@ def _index_array(name: str, b: dict, collection: str = "") -> np.ndarray:
         if name == "ndre":
             return (b["nir"] - b["rededge1"]) / (b["nir"] + b["rededge1"])
         if name == "evi":
-            return 2.5 * (b["nir"] - b["red"]) / (b["nir"] + 6.0 * b["red"] - 7.5 * b["blue"] + 1.0)
+            den = b["nir"] + 6.0 * b["red"] - 7.5 * b["blue"] + 1.0
+            evi = 2.5 * (b["nir"] - b["red"]) / den
+            # 分母趋零/为负时数值会爆掉（S2 L2A 亮地表常见），裁到 [-1,1]，无效置 NaN
+            return np.where(den > 0.05, np.clip(evi, -1.0, 1.0), np.nan)
         if name == "savi":
             lf = 0.5
             return (b["nir"] - b["red"]) * (1.0 + lf) / (b["nir"] + b["red"] + lf)

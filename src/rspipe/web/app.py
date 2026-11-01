@@ -591,6 +591,57 @@ def create_app() -> FastAPI:
         )
         return res
 
+    @app.post("/api/analysis/batch")
+    def api_analysis_batch(body: dict) -> dict:
+        """组合分析：一次算多个指数，逐个写结果并记录历史。"""
+        from rspipe.web.analysis import INDICES, classify_stats, compute_scene_index, record_run
+
+        scene_id = (body.get("scene_id") or "").strip()
+        provider = (body.get("provider") or "").strip()
+        names = [str(n).strip().lower() for n in (body.get("indices") or [])]
+        threshold = float(body.get("threshold", 0.0) or 0.0)
+        if not scene_id or not provider:
+            raise HTTPException(422, "scene_id / provider 必填")
+        names = [n for n in names if n in INDICES]
+        if not names:
+            raise HTTPException(422, "indices 必填")
+
+        coll = _collection_of_scene(provider, scene_id)
+        items = []
+        for name in names:
+            res = compute_scene_index(Path(cfg.data_root), provider, scene_id, coll, name)
+            if res.get("ok"):
+                res["classify"] = classify_stats(
+                    Path(cfg.data_root), provider, scene_id, name, threshold
+                )
+                record_run(
+                    Path(cfg.data_root),
+                    scene_id,
+                    {
+                        "mode": "single",
+                        "index": name,
+                        "threshold": threshold,
+                        "provider": provider,
+                        "scene_a": scene_id,
+                    },
+                )
+                items.append(
+                    {
+                        "index": name,
+                        "ok": True,
+                        "stats": res["stats"],
+                        "classify": res["classify"],
+                        "tiles": f"/api/analysis/tiles/{scene_id}/{name}/{{z}}/{{x}}/{{y}}.png",
+                    }
+                )
+            else:
+                items.append({"index": name, "ok": False, "error": res.get("error")})
+        return {
+            "ok": True,
+            "items": items,
+            "source_tiles": f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png",
+        }
+
     @app.post("/api/analysis/change")
     def api_analysis_change(body: dict) -> dict:
         from rspipe.web.analysis import INDICES, compute_change
