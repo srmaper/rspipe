@@ -10,19 +10,6 @@
         <!-- 通用说明：两期变化 + 前提条件 + 常见问题 -->
         <h4 class="cat-h">通用说明</h4>
         <div class="grid general">
-          <article v-for="t in GENERAL" :key="t.name" class="tcard">
-            <div class="tt">
-              <b>{{ t.name }}</b>
-              <span class="cn">{{ t.cn }}</span>
-            </div>
-            <div class="f">{{ t.formula }}</div>
-            <dl>
-              <dt>所需栅格</dt><dd>{{ t.bands }}</dd>
-              <dt>参数</dt><dd>{{ t.param }}</dd>
-              <dt>结果</dt><dd>{{ t.result }}</dd>
-            </dl>
-          </article>
-
           <article class="tcard info">
             <div class="tt"><b>前提条件</b></div>
             <dl>
@@ -42,6 +29,19 @@
               <dt>定量结论</dt><dd>产量/水质/生物量需地面数据标定，指数为相对指标</dd>
             </dl>
           </article>
+          <article v-for="t in GENERAL" :key="t.name" class="tcard info">
+            <div class="tt">
+              <b>{{ t.name }}</b>
+              <span class="cn">{{ t.cn }}</span>
+            </div>
+            <div class="f">{{ t.formula }}</div>
+            <dl>
+              <dt>所需栅格</dt><dd>{{ t.bands }}</dd>
+              <dt>参数</dt><dd>{{ t.param }}</dd>
+              <dt>结果</dt><dd>{{ t.result }}</dd>
+            </dl>
+          </article>
+
         </div>
 
         <!-- 具体分析单元：按类别分组 -->
