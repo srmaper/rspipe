@@ -113,6 +113,7 @@ const logs = ref([])
 function toggleAoiLayer() {
   aoiVisible.value = !aoiVisible.value
   mapRef.value?.setAoiVisible(aoiVisible.value)
+  mapRef.value?.setSceneAoiVisible(aoiVisible.value)
 }
 function goAnalysis() {
   location.hash = '#/analysis'
@@ -124,7 +125,6 @@ function logLn(s) {
 }
 
 const bbox = ref(null)
-const aoiGeom = ref(null)   // 当前下载范围几何（预览别景时用于还原）
 const aoiName = ref('')
 const aois = ref([])
 const aoiTool = ref(null)       // 'rect' | 'poly' | 'search' | null —— 三按钮互斥单选
@@ -262,7 +262,6 @@ function applyFetchedAoi(a) {
   const xs = ring.map(p => p[0]); const ys = ring.map(p => p[1])
   bbox.value = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
   aoiName.value = a.name
-  aoiGeom.value = g
   mapRef.value?.fitBbox(bbox.value)
   mapRef.value?.setAoiPolygon(g)
   setAoiArea(ring, bbox.value)
@@ -333,7 +332,6 @@ function onToolBtn(m) {
 }
 function clearAoi() {
   bbox.value = null; aoiName.value = ''
-  aoiGeom.value = null
   aoiTool.value = null
   mapRef.value?.setDrawMode(null)
   mapRef.value?.setAoiPolygon(null)
@@ -421,9 +419,6 @@ async function onTaskDelete(j) {
 function onBboxPick(b, ring) {
   setAoiArea(ring, b)
   bbox.value = b
-  aoiGeom.value = ring && ring.length >= 3
-    ? { type: 'Polygon', coordinates: [ring.concat([ring[0]])] }
-    : null
   logLn(`AOI=${b.map(v => v.toFixed(3)).join(', ')}`)
 }
 async function onSearch(cfg) {
@@ -510,8 +505,8 @@ function loadSceneAoi(provider, sceneId) {
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {
       if (previewLayer.value?.scene_id !== sceneId) return
-      mapRef.value?.setAoiPolygon(j && j.geometry ? j.geometry : null)
-      mapRef.value?.setAoiVisible(aoiVisible.value)
+      mapRef.value?.setSceneAoi(j && j.geometry ? j.geometry : null)
+      mapRef.value?.setSceneAoiVisible(aoiVisible.value)
     })
     .catch(() => {})
 }
@@ -626,8 +621,7 @@ function setChannels(v) {
 function clearPreview() {
   previewLayer.value = null
   mapRef.value?.clearPreview()
-  mapRef.value?.setAoiPolygon(aoiGeom.value)
-  mapRef.value?.setAoiVisible(aoiVisible.value)
+  mapRef.value?.clearSceneAoi()
 }
 const labelOf = g => (g.collection.includes('landsat') ? 'Landsat 8/9' : 'Sentinel-2') + ' · ' + g.provider
 

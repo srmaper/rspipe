@@ -17,7 +17,7 @@ from PIL import Image
 
 from rspipe.ingest.cogreader import CogReader
 from rspipe.ingest.signing import needs_signing, sign_href
-from rspipe.web.tiles import _ndvi_lut, _stretch_rgb, plan_tile_window, tile_bounds
+from rspipe.web.tiles import _ndvi_lut, _stretch_rgb, _tone_rgb, plan_tile_window, tile_bounds
 
 _SCENE_TTL = 600.0
 _READER_TTL = 900.0
@@ -144,6 +144,8 @@ def _compose(channels: str, stacks: list[np.ndarray]) -> tuple[np.ndarray, np.nd
         stack = np.stack(stacks)
         valid = np.isfinite(stack).all(axis=0) & (stack.sum(axis=0) > 0)
         rgb = _stretch_rgb(stack, valid)
+        if channels == "rgb":
+            rgb = _tone_rgb(rgb)
     return rgb, valid
 
 
@@ -211,6 +213,8 @@ def render_local_tile(
     else:
         scale = "landsat" if "landsat" in collection else "s2"
         rgb, valid = _stretch_fixed(_ranges_for_raw(raw_dir, keys, scale), keys, stacks)
+        if channels == "rgb":
+            rgb = _tone_rgb(rgb)
     return _png(rgb, valid)
 
 

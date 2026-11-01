@@ -103,6 +103,17 @@ def _window_for_tile(src: rasterio.io.DatasetReader, z: int, x: int, y: int):
     return Window(col, row, w, h)
 
 
+def _tone_rgb(rgb: np.ndarray, shoulder: float = 0.8) -> np.ndarray:
+    """真彩色高光肩部：只压缩最亮的一段，压掉 2%~98% 线性拉伸的过曝，不动中间调。
+
+    rgb: (3, H, W) 0-255。shoulder=0.8 表示 80% 以上按 tanh 软压缩到 1.0。
+    """
+    x = np.clip(rgb, 0, 255) / 255.0
+    a = shoulder
+    x = np.where(x <= a, x, a + (1.0 - a) * np.tanh((x - a) / (1.0 - a)))
+    return np.clip(x, 0.0, 1.0) * 255.0
+
+
 def _stretch_rgb(stack: np.ndarray, valid: np.ndarray) -> np.ndarray:
     """逐通道 2%~98% 线性拉伸到 0-255；无效区输出 255(白)。"""
     out = np.full(stack.shape, 255, dtype="float32")
@@ -162,6 +173,8 @@ def render_tile(
                 stack = stack / 10000.0
             valid = np.isfinite(stack[0]) & np.isfinite(stack[1]) & np.isfinite(stack[2])
             rgb = _stretch_rgb(stack, valid)
+            if channels == "rgb":
+                rgb = _tone_rgb(rgb)
 
         img = Image.fromarray(rgb.transpose(1, 2, 0).astype("uint8"), mode="RGB")
         buf = io.BytesIO()
@@ -218,7 +231,7 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
                     arr[arr <= 0] = np.nan
                 v = arr[np.isfinite(arr)]
                 if v.size:
-                    lo, hi = np.percentile(v, [2, 98])
+                    lo, hi = np.percentile(v, [1, 99.5])
                     out[bi] = (float(lo), float(hi))
     except Exception:
         return out
@@ -344,6 +357,8 @@ def render_raster_tile(
             if hi <= lo:
                 hi = lo + 1e-6
             rgb[i] = np.where(valid, np.clip((canvas[i] - lo) / (hi - lo) * 255.0, 0, 255), 0)
+        if channels == "rgb":
+            rgb = _tone_rgb(rgb)
 
     if valid.mean() < 0.002:
         return None

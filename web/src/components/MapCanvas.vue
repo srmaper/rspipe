@@ -196,6 +196,39 @@ function setAoiVisible(visible) {
   } catch (e) { /* 图层尚未创建 */ }
 }
 
+// ── 预览景自己的 AOI（红色）：与下载范围（黄色）分开，互不影响 ──
+let sceneAoiVisible = true
+function setSceneAoi(geom) {
+  if (!map) return
+  if (!geom) { clearSceneAoi(); return }
+  const data = { type: 'Feature', geometry: geom, properties: {} }
+  if (!map.getSource('saoi')) {
+    map.addSource('saoi', { type: 'geojson', data })
+    map.addLayer({
+      id: 'saoi-line', type: 'line', source: 'saoi',
+      paint: { 'line-color': '#ef4444', 'line-width': 3, 'line-opacity': 0.95 },
+    })
+  } else {
+    map.getSource('saoi').setData(data)
+  }
+  try { map.setLayoutProperty('saoi-line', 'visibility', sceneAoiVisible ? 'visible' : 'none') } catch (e) {}
+  restackBusinessLayers(map)
+}
+function clearSceneAoi() {
+  if (!map) return
+  try { if (map.getLayer('saoi-line')) map.removeLayer('saoi-line') } catch (e) {}
+  try { if (map.getSource('saoi')) map.removeSource('saoi') } catch (e) {}
+}
+function setSceneAoiVisible(visible) {
+  sceneAoiVisible = visible
+  if (!map) return
+  try {
+    if (map.getLayer('saoi-line')) {
+      map.setLayoutProperty('saoi-line', 'visibility', visible ? 'visible' : 'none')
+    }
+  } catch (e) {}
+}
+
 function fitBbox(b) {
   if (!map || !b) return
   map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, maxZoom: 18 })
@@ -366,7 +399,7 @@ function injectCarto(map) {
 }
 
 function restackBusinessLayers(m) {
-  const top = ['srcprev', 'preview', 'pext-line', 'rvec-fill', 'rvec-line', 'selfp-fill', 'selfp-line', 'aoi-line']
+  const top = ['srcprev', 'preview', 'pext-line', 'rvec-fill', 'rvec-line', 'selfp-fill', 'selfp-line', 'saoi-line', 'aoi-line']
   for (const id of top) {
     try { if (m.getLayer(id)) m.moveLayer(id) } catch (e) {}
   }
@@ -404,6 +437,7 @@ function viewportBbox() {
 defineExpose({
   fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, setResultVector, setVectorVisible, clearPreview, setBasemap, setDrawMode, viewportBbox,
   setSourceTiles, clearSource, setSourceVisible, clearResultVector,
+  setSceneAoi, clearSceneAoi, setSceneAoiVisible,
 })
 </script>
 
