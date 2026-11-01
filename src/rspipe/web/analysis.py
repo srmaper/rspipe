@@ -22,6 +22,18 @@ INDICES = {
     "nbr": (("nir", "swir22"), "归一化燃烧指数 (NIR-SWIR2)/(NIR+SWIR2)"),
     "bsi": (("swir16", "red", "nir", "blue"), "裸土指数 ((SWIR1+R)-(NIR+B))/((SWIR1+R)+(NIR+B))"),
     "ndre": (("nir", "rededge1"), "红边叶绿素指数 (NIR-RE1)/(NIR+RE1)"),
+    "evi": (("blue", "red", "nir"), "增强型植被指数 2.5(NIR-R)/(NIR+6R-7.5B+1)"),
+    "savi": (("red", "nir"), "土壤调整植被指数 (NIR-R)(1+L)/(NIR+R+L)，L=0.5"),
+    "nbr2": (("swir16", "swir22"), "归一化燃烧指数2 (SWIR1-SWIR2)/(SWIR1+SWIR2)"),
+    "ndmi": (("nir", "swir16"), "归一化水分指数 (NIR-SWIR1)/(NIR+SWIR1)"),
+    "mndwi": (("green", "swir16"), "改进水体指数 (G-SWIR1)/(G+SWIR1)"),
+    "awei": (
+        ("green", "nir", "swir16", "swir22"),
+        "自动水体提取指数 4(G-SWIR1)-(0.25NIR+2.75SWIR2)",
+    ),
+    "fai": (("green", "red", "nir", "swir16"), "浮游藻类指数 NIR-基线(Red→SWIR1)，仅统计水体"),
+    "ndsi": (("green", "swir16"), "归一化积雪指数 (G-SWIR1)/(G+SWIR1)"),
+    "si": (("red", "swir16"), "盐分指数 √(Red×SWIR1)"),
 }
 
 # 伪彩：低 → 中 → 高
@@ -32,6 +44,15 @@ COLORMAPS = {
     "nbr": [(40, 40, 40), (250, 200, 40), (0, 110, 60)],
     "bsi": [(240, 240, 240), (190, 170, 140), (110, 80, 50)],
     "ndre": [(139, 110, 80), (235, 220, 120), (0, 130, 60)],
+    "evi": [(139, 110, 80), (230, 215, 120), (0, 120, 55)],
+    "savi": [(139, 110, 80), (230, 215, 120), (0, 120, 55)],
+    "nbr2": [(60, 45, 35), (240, 200, 120), (0, 110, 60)],
+    "ndmi": [(170, 120, 80), (245, 245, 245), (20, 90, 170)],
+    "mndwi": [(150, 120, 80), (245, 245, 245), (20, 70, 160)],
+    "awei": [(150, 120, 80), (245, 245, 245), (20, 70, 160)],
+    "fai": [(30, 60, 120), (240, 240, 240), (0, 160, 60)],
+    "ndsi": [(140, 110, 80), (235, 240, 250), (70, 130, 220)],
+    "si": [(30, 110, 50), (230, 220, 180), (180, 60, 40)],
 }
 
 # 每个指数的推荐阈值与显示区间（不同指数的取值范围差别很大，不能共用一个）
@@ -108,6 +129,114 @@ INDEX_META = {
         "vmax": 0.6,
         "low": "弱长势",
         "high": "强长势",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
+    "evi": {
+        "label": "增强植被指数",
+        "threshold": 0.30,
+        "slider": (-0.2, 1.0, 0.05),
+        "vmin": -0.2,
+        "vmax": 1.0,
+        "low": "裸土 / 水体",
+        "high": "浓密植被",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "savi": {
+        "label": "土壤调整植被",
+        "threshold": 0.30,
+        "slider": (-0.2, 0.9, 0.05),
+        "vmin": -0.2,
+        "vmax": 0.9,
+        "low": "裸土 / 水体",
+        "high": "浓密植被",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "nbr2": {
+        "label": "燃烧指数2",
+        "threshold": 0.05,
+        "slider": (-0.3, 0.4, 0.01),
+        "vmin": -0.3,
+        "vmax": 0.4,
+        "low": "火烧 / 干燥",
+        "high": "湿润 / 健康",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
+    "ndmi": {
+        "label": "植被水分",
+        "threshold": 0.10,
+        "slider": (-0.5, 0.6, 0.05),
+        "vmin": -0.5,
+        "vmax": 0.6,
+        "low": "干旱 / 缺水",
+        "high": "水分充足",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "mndwi": {
+        "label": "改进水体指数",
+        "threshold": 0.10,
+        "slider": (-0.5, 0.6, 0.05),
+        "vmin": -0.4,
+        "vmax": 0.6,
+        "low": "陆地",
+        "high": "水体",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "awei": {
+        "label": "自动水体提取",
+        "threshold": 0.00,
+        "slider": (-0.5, 0.5, 0.05),
+        "vmin": -0.5,
+        "vmax": 0.5,
+        "low": "非水体",
+        "high": "水体",
+        "change_threshold": 0.10,
+        "change_vmin": -0.3,
+        "change_vmax": 0.3,
+    },
+    "fai": {
+        "label": "浮游藻类（水体）",
+        "threshold": 0.02,
+        "slider": (-0.05, 0.15, 0.01),
+        "vmin": -0.05,
+        "vmax": 0.15,
+        "low": "清水",
+        "high": "藻类富集",
+        "change_threshold": 0.02,
+        "change_vmin": -0.1,
+        "change_vmax": 0.1,
+    },
+    "ndsi": {
+        "label": "积雪指数",
+        "threshold": 0.40,
+        "slider": (-0.5, 1.0, 0.05),
+        "vmin": -0.5,
+        "vmax": 1.0,
+        "low": "非雪",
+        "high": "积雪",
+        "change_threshold": 0.20,
+        "change_vmin": -0.4,
+        "change_vmax": 0.4,
+    },
+    "si": {
+        "label": "盐分指数",
+        "threshold": 0.15,
+        "slider": (0.0, 0.5, 0.01),
+        "vmin": 0.0,
+        "vmax": 0.5,
+        "low": "低盐分",
+        "high": "盐渍化",
         "change_threshold": 0.05,
         "change_vmin": -0.2,
         "change_vmax": 0.2,
@@ -205,7 +334,7 @@ def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
     return out, transform, crs, []
 
 
-def _index_array(name: str, b: dict) -> np.ndarray:
+def _index_array(name: str, b: dict, collection: str = "") -> np.ndarray:
     with np.errstate(invalid="ignore", divide="ignore"):
         if name == "ndvi":
             return (b["nir"] - b["red"]) / (b["nir"] + b["red"])
@@ -221,6 +350,30 @@ def _index_array(name: str, b: dict) -> np.ndarray:
             return a / c
         if name == "ndre":
             return (b["nir"] - b["rededge1"]) / (b["nir"] + b["rededge1"])
+        if name == "evi":
+            return 2.5 * (b["nir"] - b["red"]) / (b["nir"] + 6.0 * b["red"] - 7.5 * b["blue"] + 1.0)
+        if name == "savi":
+            lf = 0.5
+            return (b["nir"] - b["red"]) * (1.0 + lf) / (b["nir"] + b["red"] + lf)
+        if name == "nbr2":
+            return (b["swir16"] - b["swir22"]) / (b["swir16"] + b["swir22"])
+        if name == "ndmi":
+            return (b["nir"] - b["swir16"]) / (b["nir"] + b["swir16"])
+        if name == "mndwi":
+            return (b["green"] - b["swir16"]) / (b["green"] + b["swir16"])
+        if name == "awei":
+            return 4.0 * (b["green"] - b["swir16"]) - (0.25 * b["nir"] + 2.75 * b["swir22"])
+        if name == "fai":
+            # 基线：Red→SWIR1 直线在 NIR 处的插值（S2 约 0.19，Landsat 约 0.22）
+            k = 0.22 if "landsat" in collection.lower() else 0.19
+            fai = b["nir"] - (b["red"] + (b["swir16"] - b["red"]) * k)
+            # FAI 只在水体上有意义：用 MNDWI 限定，避免陆地高 NIR 被当成藻类
+            mndwi = (b["green"] - b["swir16"]) / (b["green"] + b["swir16"])
+            return np.where(mndwi > 0.0, fai, np.nan)
+        if name == "ndsi":
+            return (b["green"] - b["swir16"]) / (b["green"] + b["swir16"])
+        if name == "si":
+            return np.sqrt(np.clip(b["red"] * b["swir16"], 0.0, None))
     raise ValueError(f"unknown index {name}")
 
 
@@ -240,7 +393,7 @@ def compute_scene_index(
     if bands is None:
         return {"ok": False, "error": "缺少波段：" + ", ".join(missing)}
 
-    arr = _index_array(index, bands)
+    arr = _index_array(index, bands, collection)
     valid = np.isfinite(arr)
     if not valid.any():
         return {"ok": False, "error": "无有效像元"}

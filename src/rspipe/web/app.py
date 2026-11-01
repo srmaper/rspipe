@@ -517,9 +517,16 @@ def create_app() -> FastAPI:
     @app.get("/api/analysis/meta")
     def api_analysis_meta() -> dict:
         """各指数的推荐阈值与伪彩区间（前端滑块/图例用）。"""
-        from rspipe.web.analysis import INDEX_META
+        from rspipe.web.analysis import COLORMAPS, INDEX_META
 
-        return {"indices": INDEX_META}
+        out = {}
+        for key, meta in INDEX_META.items():
+            item = dict(meta)
+            stops = COLORMAPS.get(key)
+            if stops:
+                item["colors"] = ["#{:02x}{:02x}{:02x}".format(*c) for c in stops]
+            out[key] = item
+        return {"indices": out}
 
     @app.get("/api/analysis/scenes")
     def api_analysis_scenes() -> list[dict]:

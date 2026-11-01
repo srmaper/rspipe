@@ -33,7 +33,7 @@
           <article class="tcard info">
             <div class="tt"><b>常见问题</b></div>
             <dl>
-              <dt>无指数可选</dt><dd>只下载了 RGBN → 只能算 NDVI/NDWI；NDBI/NBR/BSI 需补下 swir16 / swir22</dd>
+              <dt>无指数可选</dt><dd>只下载了 RGBN → 只能算 NDVI/NDWI/EVI/SAVI；NDBI/NBR/BSI/MNDWI/NDMI 等需补下 swir16 / swir22</dd>
               <dt>结果空白</dt><dd>下载的是 AOI 裁剪范围，范围外无数据属正常</dd>
               <dt>差异很小</dt><dd>同季节对比更可靠，跨季节差异主要来自物候</dd>
               <dt>定量结论</dt><dd>产量/水质/生物量需地面数据标定，指数为相对指标</dd>

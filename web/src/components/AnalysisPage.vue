@@ -171,6 +171,15 @@ const INDICES = [
   { name: 'nbr', desc: '燃烧指数', need: ['nir', 'swir22'] },
   { name: 'bsi', desc: '裸土指数', need: ['swir16', 'red', 'nir', 'blue'] },
   { name: 'ndre', desc: '红边叶绿素', need: ['nir', 'rededge1'] },
+  { name: 'evi', desc: '增强植被', need: ['blue', 'red', 'nir'] },
+  { name: 'savi', desc: '土壤调整植被', need: ['red', 'nir'] },
+  { name: 'nbr2', desc: '燃烧指数2', need: ['swir16', 'swir22'] },
+  { name: 'ndmi', desc: '植被水分', need: ['nir', 'swir16'] },
+  { name: 'mndwi', desc: '改进水体', need: ['green', 'swir16'] },
+  { name: 'awei', desc: '自动水体提取', need: ['green', 'nir', 'swir16', 'swir22'] },
+  { name: 'fai', desc: '浮游藻类', need: ['red', 'nir', 'swir16'] },
+  { name: 'ndsi', desc: '积雪', need: ['green', 'swir16'] },
+  { name: 'si', desc: '盐分', need: ['red', 'swir16'] },
 ]
 
 const guideOpen = ref(false)
@@ -298,14 +307,7 @@ const statRows = computed(() => {
 })
 
 const legendCss = computed(() => {
-  const c = {
-    ndvi: ['#8b6e50', '#e6d778', '#007837'],
-    ndwi: ['#967850', '#f5f5f5', '#1446a0'],
-    ndbi: ['#007837', '#dcdcdc', '#c82828'],
-    nbr: ['#282828', '#fac828', '#006e3c'],
-    bsi: ['#f0f0f0', '#beaa8c', '#6e5032'],
-    ndre: ['#8b6e50', '#ebdc78', '#00823c'],
-  }[index.value] || ['#8b6e50', '#e6d778', '#007837']
+  const c = curMeta.value.colors || ['#8b6e50', '#e6d778', '#007837']
   const stops = mode.value === 'change' ? ['#c82828', '#f5f5f5', '#00823c'] : c
   return `linear-gradient(90deg, ${stops.join(',')})`
 })
@@ -682,7 +684,7 @@ onMounted(async () => {
   border-radius: 10px; padding: 5px 7px; box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .layerbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
-.badge {
+#center > .badge {
   position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
   z-index: 20; max-width: 70%;
   background: rgba(255,255,255,.95); border: 1px solid var(--line);

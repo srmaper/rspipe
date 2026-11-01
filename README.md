@@ -104,7 +104,7 @@ scripts\web_server.cmd   # 杀旧实例并启动，监听 8000（崩溃自动拉
 |---|---|
 | `#/` | 首页（下载影像 / 数据分析 两个入口） |
 | `#/download` | 检索 · AOI 圈选 · 选波段下载 · 真彩/假彩/NDVI 预览 · 导出 zip |
-| `#/analysis` | 指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比 |
+| `#/analysis` | 指数分析（15 种：NDVI/NDWI/NDBI/NBR/BSI/NDRE/EVI/SAVI/NBR2/NDMI/MNDWI/AWEI/FAI/NDSI/SI）、两期变化、双屏对比 |
 
 > 单次下载 AOI 面积上限 **500 km²**（约 22 km × 22 km），超限会在页面中央提示并阻止提交；
 > 更大范围请分块下载后用 `rspipe mosaic` 镶嵌。
@@ -183,7 +183,7 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 | GET | `/api/export/{id}` | 打包 zip（COG + composite.tif + raw + quicklook + README + STAC json） |
 | POST | `/api/geocode` | 地名 → 边界（geoscope 主源，Nominatim 兜底，点/线自动 100m 缓冲） |
 | GET | `/api/analysis/scenes` | 已下载影像清单（含可用波段、范围） |
-| POST | `/api/analysis/run` | 计算单景指数（ndvi/ndwi/ndbi/nbr/bsi/ndre）+ 阈值分类统计 |
+| POST | `/api/analysis/run` | 计算单景指数（ndvi/ndwi/ndbi/nbr/bsi/ndre/evi/savi/nbr2/ndmi/mndwi/awei/fai/ndsi/si）+ 阈值分类统计 |
 | POST | `/api/analysis/change` | 两期指数差值 + 变化面积（减少/增加） |
 | GET | `/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png` | 指数/变化结果伪彩瓦片 |
 | GET | `/api/aoi` | `configs/aoi_*.geojson` 预设列表 |
@@ -334,6 +334,9 @@ docs/             设计与问题记录
 - `docs/web项目设计.md` — Web 平台架构与分期
 - `docs/应用能力介绍.md` — 能做哪些应用（城市/农业/林业/水环境/灾害/执法等）、方法、产出与能力边界
 - `docs/开发问题与经验.md` — 踩坑清单与规避方法
+- `docs/2.0-规划-土地利用分类.md` — 2.0 土地利用分类：数据源实测、规则原型、方案与里程碑
+- `docs/2.0-规划-数据源扩展.md` — 2.0 可免费接入的影像源（PC 集合清单、需账号/国产、优先级）
+- `docs/2.0-规划-高级分析.md` — 2.0 高级分析清单（15 指数现状 + P0/P1/P2 排期 + 勘误）
 
 ## 许可证
 
