@@ -718,6 +718,21 @@ def create_app() -> FastAPI:
         except Exception:
             return {"type": "FeatureCollection", "features": []}
 
+    # ---------- 版本与更新检查 ----------
+    @app.get("/api/version")
+    def api_version() -> dict:
+        from rspipe import __version__
+
+        return {"version": __version__}
+
+    @app.get("/api/update/check")
+    def api_update_check(force: bool = False) -> dict:
+        """查询 GitHub Releases 最新版本（磁盘缓存 6 小时，失败静默）。"""
+        from rspipe import __version__
+        from rspipe.web.update import check_update
+
+        return check_update(Path(cfg.data_root), __version__, force=force)
+
     # ---------- 瓦片（本地 COG 优先；缺失时直接读云端金字塔层做整景预览） ----------
     @app.get("/api/tiles/{scene_id}/{z}/{x}/{y}.png")
     def api_tile(

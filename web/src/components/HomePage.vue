@@ -21,7 +21,10 @@
       </section>
     </main>
 
-    <footer class="foot">数据源：earth-search（Sentinel-2）· planetary-computer（Landsat 8/9）</footer>
+    <footer class="foot">
+      数据源：earth-search（Sentinel-2）· planetary-computer（Landsat 8/9）
+      <span class="ver">v{{ version }} · <a href="#" @click.prevent="checkUpdate">检查更新</a></span>
+    </footer>
 
     <div v-if="contactOpen" class="mask" @click.self="contactOpen = false">
       <div class="dialog" role="dialog" aria-modal="true" aria-label="联系作者">
@@ -46,6 +49,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 defineEmits(['go'])
 
 const WECHAT = '18734242374'
+const version = ref('')
 const contactOpen = ref(false)
 const copied = ref(false)
 let copiedTimer = null
@@ -71,7 +75,21 @@ async function copyWx() {
 function onKey(e) {
   if (e.key === 'Escape') contactOpen.value = false
 }
-onMounted(() => window.addEventListener('keydown', onKey))
+function checkUpdate() {
+  window.dispatchEvent(new Event('rspipe:check-update'))
+}
+
+async function loadVersion() {
+  try {
+    const r = await fetch('/api/version')
+    if (r.ok) version.value = (await r.json()).version || ''
+  } catch (e) { /* 忽略 */ }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  loadVersion()
+})
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   clearTimeout(copiedTimer)
@@ -229,4 +247,7 @@ p { margin: 0; color: rgba(226, 240, 255, .72); font-size: 12.5px; line-height: 
   background: linear-gradient(0deg, rgba(3, 8, 18, .88), rgba(3, 8, 18, 0));
   letter-spacing: .3px;
 }
+.ver { margin-left: 10px; color: rgba(226, 240, 255, .6); }
+.ver a { color: var(--accent); text-decoration: none; margin-left: 6px; }
+.ver a:hover { text-decoration: underline; }
 </style>
