@@ -381,6 +381,22 @@ def create_app() -> FastAPI:
                 }
         raise HTTPException(404, f"{scene_id} not found on {provider}")
 
+    @app.get("/api/scenes/{provider}/{scene_id}/aoi")
+    def api_scene_aoi(provider: str, scene_id: str) -> dict:
+        """该景下载时记录的 AOI 边界。"""
+        f = Path(cfg.data_root) / "raw" / provider / scene_id / "aoi.geojson"
+        if not f.exists():
+            raise HTTPException(404, "该景没有 AOI 记录")
+        try:
+            gj = json.loads(f.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise HTTPException(500, f"AOI 记录损坏：{exc}") from exc
+        feats = gj.get("features") or []
+        geom = feats[0].get("geometry") if feats else None
+        if not geom:
+            raise HTTPException(404, "该景没有 AOI 记录")
+        return {"geometry": geom}
+
     # ---------- AOI ----------
     @app.post("/api/aoi/upload")
     def api_aoi_upload(body: dict) -> dict:

@@ -124,6 +124,7 @@ function logLn(s) {
 }
 
 const bbox = ref(null)
+const aoiGeom = ref(null)   // 当前下载范围几何（预览别景时用于还原）
 const aoiName = ref('')
 const aois = ref([])
 const aoiTool = ref(null)       // 'rect' | 'poly' | 'search' | null —— 三按钮互斥单选
@@ -261,6 +262,7 @@ function applyFetchedAoi(a) {
   const xs = ring.map(p => p[0]); const ys = ring.map(p => p[1])
   bbox.value = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
   aoiName.value = a.name
+  aoiGeom.value = g
   mapRef.value?.fitBbox(bbox.value)
   mapRef.value?.setAoiPolygon(g)
   setAoiArea(ring, bbox.value)
@@ -331,6 +333,7 @@ function onToolBtn(m) {
 }
 function clearAoi() {
   bbox.value = null; aoiName.value = ''
+  aoiGeom.value = null
   aoiTool.value = null
   mapRef.value?.setDrawMode(null)
   mapRef.value?.setAoiPolygon(null)
@@ -418,6 +421,9 @@ async function onTaskDelete(j) {
 function onBboxPick(b, ring) {
   setAoiArea(ring, b)
   bbox.value = b
+  aoiGeom.value = ring && ring.length >= 3
+    ? { type: 'Polygon', coordinates: [ring.concat([ring[0]])] }
+    : null
   logLn(`AOI=${b.map(v => v.toFixed(3)).join(', ')}`)
 }
 async function onSearch(cfg) {
@@ -497,6 +503,18 @@ function geomBbox(g) {
   }
   return Number.isFinite(minx) ? [minx, miny, maxx, maxy] : null
 }
+function loadSceneAoi(provider, sceneId) {
+  if (!provider || !sceneId) return
+  const url = `/api/scenes/${provider}/${encodeURIComponent(sceneId)}/aoi`
+  fetch(url)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      if (previewLayer.value?.scene_id !== sceneId) return
+      mapRef.value?.setAoiPolygon(j && j.geometry ? j.geometry : null)
+      mapRef.value?.setAoiVisible(aoiVisible.value)
+    })
+    .catch(() => {})
+}
 function startPreview(s) {
   // 缩放优先级：raw 裁剪实际范围 > AOI > 景范围
   const provider = s.provider
@@ -506,6 +524,8 @@ function startPreview(s) {
   const dataBounds = s.raw_bounds || s.cog_bounds || bbox.value || sceneBounds
   previewLayer.value = { ...s, provider, collection, bounds: dataBounds, ready: true }
   channels.value = 'rgb'
+  // AOI 图层显示这张影像自己的 AOI，避免与当前下载范围混淆
+  loadSceneAoi(provider, s.scene_id)
   // 视野：有 AOI 就停在 AOI（否则整景预览会把 AOI 甩出屏幕，看起来像"没画"）
   const inter = intersectBounds(dataBounds, bbox.value)
   if (bbox.value && dataBounds && !inter) logLn('该景不覆盖当前 AOI，AOI 不在视野内')
@@ -603,7 +623,12 @@ function setChannels(v) {
   const p = previewLayer.value
   mapRef.value?.setPreviewTiles(p.scene_id, v, p.provider, p.collection, p.bounds)
 }
-function clearPreview() { previewLayer.value = null; mapRef.value?.clearPreview() }
+function clearPreview() {
+  previewLayer.value = null
+  mapRef.value?.clearPreview()
+  mapRef.value?.setAoiPolygon(aoiGeom.value)
+  mapRef.value?.setAoiVisible(aoiVisible.value)
+}
 const labelOf = g => (g.collection.includes('landsat') ? 'Landsat 8/9' : 'Sentinel-2') + ' · ' + g.provider
 
 // 底部坐标条：监听鼠标事件由 MapCanvas 转发
