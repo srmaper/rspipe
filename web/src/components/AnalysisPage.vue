@@ -46,15 +46,6 @@
               </option>
             </optgroup>
           </select>
-          <label>组合分析（一次算一组）</label>
-          <div class="combos">
-            <button
-              v-for="c in COMBOS"
-              :key="c.key"
-              :disabled="mode !== 'single' || !sceneA || !!comboBusy"
-              @click="runCombo(c)"
-            >{{ comboBusy === c.key ? '计算中…' : c.label }}</button>
-          </div>
           <div v-if="missingBands.length" class="warn">
             缺少波段：{{ missingBands.join(', ') }}
           </div>
@@ -115,24 +106,8 @@
         <div class="card" id="tour-result" style="flex:4 1 0;min-height:0;display:flex;flex-direction:column">
           <h3>分析结果</h3>
           <div class="reslist">
-            <div v-if="!stats && !batch.length" class="hint">选择影像与指数后点击「开始计算」，或直接点「组合分析」。</div>
-            <table v-if="batch.length" class="bt">
-              <tr><th>指数</th><th>均值</th><th>有效面积</th><th>&gt;阈值</th></tr>
-              <tr
-                v-for="b in batch"
-                :key="b.index"
-                :class="{ bad: !b.ok, active: batchActive === b.index }"
-                :title="b.ok ? '点击切换地图显示' : b.error"
-                @click="showBatchItem(b)"
-              >
-                <td>{{ b.index.toUpperCase() }}</td>
-                <td>{{ b.ok ? b.stats.mean : b.error }}</td>
-                <td>{{ b.ok ? b.stats.area_km2 + ' km²' : '-' }}</td>
-                <td>{{ b.ok ? (b.classify.above_area_km2 + ' km²') : '-' }}</td>
-              </tr>
-            </table>
-            <div v-if="batch.length" class="hint">点表格任一行可切换地图显示的指数</div>
-            <table v-if="stats" class="kv" :style="batch.length ? 'margin-top:10px' : ''">
+            <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
+            <table v-if="stats" class="kv">
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
           </div>
@@ -210,13 +185,6 @@ const INDICES = [
   { name: 'si', desc: '盐分', group: '积雪与盐分', need: ['red', 'swir16'] },
 ]
 
-// 组合分析：一键算一组，互相印证（结果表并列展示，地图显示第一项）
-const COMBOS = [
-  { key: 'veg', label: '植被组', indices: ['ndvi', 'evi', 'ndmi'] },
-  { key: 'water', label: '水体组', indices: ['ndwi', 'mndwi', 'awei'] },
-  { key: 'urban', label: '城市组', indices: ['ndbi', 'bsi', 'ndvi'] },
-  { key: 'fire', label: '灾害组', indices: ['nbr', 'nbr2', 'ndsi'] },
-]
 const GROUP_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分']
 
 const guideOpen = ref(false)
@@ -256,9 +224,6 @@ const TOUR_STEPS = [
   },
 ]
 const resultVisible = ref(true)
-const batch = ref([])
-const batchActive = ref('')
-const comboBusy = ref('')
 const indexGroups = computed(() =>
   GROUP_ORDER.map((g) => ({ label: g, items: availableIndices.value.filter((i) => i.group === g) }))
     .filter((g) => g.items.length),
@@ -383,55 +348,6 @@ async function loadScenes() {
   }
 }
 
-function showBatchItem(b) {
-  if (!b || !b.ok) return
-  batchActive.value = b.index
-  index.value = b.index
-  stats.value = { ...b.stats, ...b.classify }
-  tileTemplate.value = b.tiles
-  preview.value = { scene_id: sceneA.value, ready: true, bounds: b.stats.bounds }
-  hasSource.value = true
-  applySource(sceneA.value, b.stats.bounds)
-  mapRef.value?.setPreviewTiles(sceneA.value, 'rgb', '', '', b.stats.bounds)
-  vectorKey.value = sceneA.value
-  vectorName.value = b.index
-  vectorOp.value = 'above'
-  if (vectorOn.value) loadVector()
-}
-async function runCombo(c) {
-  if (!sceneA.value || comboBusy.value) return
-  comboBusy.value = c.key
-  error.value = ''
-  batch.value = []
-  logLn(`组合分析 ${c.label} · ${sceneA.value}`)
-  try {
-    const r = await fetch('/api/analysis/batch', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scene_id: sceneA.value,
-        provider: current.value?.provider,
-        indices: c.indices,
-        threshold: threshold.value,
-      }),
-    })
-    const j = await r.json()
-    if (!j.ok) { error.value = j.error || '组合分析失败'; return }
-    batch.value = j.items || []
-    const first = (j.items || []).find((x) => x.ok)
-    if (first) {
-      showBatchItem(first)
-      mapRef.value?.fitBbox(first.stats.bounds)
-      applyAoi(sceneA.value)
-    }
-    const okN = batch.value.filter((x) => x.ok).length
-    logLn(`组合完成 ${okN}/${batch.value.length} · 地图显示 ${first ? first.index.toUpperCase() : '-'}`)
-  } catch (e) {
-    error.value = '组合分析失败：' + (e.message || e)
-  } finally {
-    comboBusy.value = ''
-    loadHistoryList()
-  }
-}
 async function run() {
   running.value = true
   error.value = ''
@@ -439,7 +355,6 @@ async function run() {
     ? `计算 ${index.value.toUpperCase()} · ${sceneA.value}`
     : `两期变化 ${index.value.toUpperCase()} · A=${sceneA.value} B=${sceneB.value}`)
   stats.value = null
-  batch.value = []
   try {
     if (mode.value === 'single') {
       const r = await fetch('/api/analysis/run', {
@@ -761,14 +676,6 @@ onMounted(async () => {
 .hrow { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .hname { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist .badge { font-size: 10.5px; }
-.combos { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
-.combos button { flex: 1; min-width: 68px; font-size: 11.5px; padding: 2px 6px; }
-.bt { width: 100%; font-size: 11.5px; border-collapse: collapse; }
-.bt th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; }
-.bt td { padding: 3px 4px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.bt tr.bad td { color: #b91c1c; }
-.bt tbody tr, .bt tr { cursor: pointer; }
-.bt tr.active td { background: #eff6ff; }
 .seg { display: flex; gap: 6px; margin-top: 2px; }
 .seg button { flex: 1; }
 .row { margin-top: 10px; }
