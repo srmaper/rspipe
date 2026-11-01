@@ -34,9 +34,17 @@ const dotColor = s =>
   ({ ok: '#16a34a', running: '#2563eb', paused: '#d97706', error: '#dc2626', queued: '#aab2bd' }[s] ||
     '#aab2bd')
 
-// 第二行：只在有信息量时显示（进度提示 / 失败原因 / 完成后的波段数与体积）
+function fmtTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts * 1000)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// 第二行：波段数/体积/进度提示 + 发起时间
 function lineText(j) {
-  if (j.status === 'error') return j.message || '失败'
+  const time = fmtTime(j.created)
+  if (j.status === 'error') return [j.message || '失败', time].filter(Boolean).join(' · ')
   if (j.status === 'ok') {
     const bands = (j.detail && j.detail.bands) || []
     const mb = j.detail && j.detail.bytes ? Math.round(j.detail.bytes / 1048576) : 0
@@ -44,9 +52,10 @@ function lineText(j) {
     if (j.type === 'processed') parts.push('成果 COG')
     if (bands.length) parts.push(bands.length + ' 波段')
     if (mb) parts.push(mb + ' MB')
-    return parts.join(' · ')
+    parts.push(time)
+    return parts.filter(Boolean).join(' · ')
   }
-  return j.message || ''
+  return [j.message || '', time].filter(Boolean).join(' · ')
 }
 </script>
 

@@ -101,6 +101,7 @@
       <div id="right">
         <div class="card" id="tour-result" style="flex:4 1 0;min-height:0;display:flex;flex-direction:column">
           <h3>分析结果</h3>
+          <div v-if="resultAt" class="hint" style="margin-bottom:4px">计算于 {{ fmtTime(resultAt) }}</div>
           <div class="reslist">
             <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
             <table v-if="stats" class="kv">
@@ -253,6 +254,7 @@ const meta = ref({})
 const running = ref(false)
 const error = ref('')
 const stats = ref(null)
+const resultAt = ref(0)
 const preview = ref(null)
 const tileTemplate = ref('')
 const mapRef = ref(null)
@@ -357,6 +359,7 @@ async function run() {
       const j = await r.json()
       if (!j.ok) { error.value = j.error || '计算失败'; logLn('失败: ' + error.value); return }
       stats.value = { ...j.stats, ...j.classify }
+      resultAt.value = Date.now() / 1000
       logLn(`完成 · 均值 ${j.stats.mean} · 有效 ${j.stats.area_km2} km²`)
       tileTemplate.value = j.tiles
       preview.value = {
@@ -384,6 +387,7 @@ async function run() {
       const j = await r.json()
       if (!j.ok) { error.value = j.error || '计算失败'; logLn('失败: ' + error.value); return }
       stats.value = j.stats
+      resultAt.value = Date.now() / 1000
       logLn(`变化完成 · 减少 ${j.stats.decrease_km2} km² / 增加 ${j.stats.increase_km2} km²`)
       tileTemplate.value = j.tiles
       const bounds = statsBounds()
@@ -522,6 +526,7 @@ async function loadHistory(h) {
 
   resultVisible.value = true
   stats.value = { ...(h.stats || {}) }
+  resultAt.value = h.created || 0
   tileTemplate.value = `/api/analysis/tiles/${h.key}/${name}/{z}/{x}/{y}.png`
   const bounds = h.stats?.bounds
   preview.value = { scene_id: h.key, ready: true, bounds }
