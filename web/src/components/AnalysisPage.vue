@@ -109,7 +109,7 @@
           </div>
         </div>
 
-        <div class="card" style="flex:6 1 0;min-height:0;display:flex;flex-direction:column">
+        <div class="card" id="tour-history" style="flex:6 1 0;min-height:0;display:flex;flex-direction:column">
           <h3>历史分析</h3>
           <div class="reslist">
             <div v-if="!history.length" class="hint">还没有分析记录，算一次就会出现在这里。</div>
@@ -212,6 +212,12 @@ const TOUR_STEPS = [
     selector: '#tour-result',
     title: '分析结果',
     text: '这里显示统计结果表：均值、中位数、P10/P90、有效面积与占比、超阈值面积等；结果栅格保存在 data/analysis。',
+  },
+  {
+    selector: '#tour-history',
+    title: '历史分析',
+    text: '每次计算都会留一条记录（指数、阈值、面积、时间）。点卡片或「加载」可回看该次结果并把左侧参数一起还原；「下载」导出 zip（栅格+统计+快视图+矢量），「删除」清掉本地产物。',
+    padding: 6,
   },
 ]
 const resultVisible = ref(true)
