@@ -3,7 +3,7 @@
     <div id="bar">
       <span class="brand"><i></i> rspipe 影像</span>
       <button class="back" @click="$emit('home')">← 首页</button>
-      <button class="back" @click="goAnalysis">转分析页</button>
+      <button class="back" id="tour-go-analysis" @click="goAnalysis">转分析页</button>
       <span class="sp"></span>
     </div>
 
@@ -184,6 +184,12 @@ const TOUR_STEPS = [
     selector: '#center',
     title: '地图操作',
     text: '左上切换真彩/假彩/NDVI 与范围显示，右下切换卫星影像/矢量底图，底部显示鼠标经纬度，左下是比例尺。',
+  },
+  {
+    selector: '#tour-go-analysis',
+    title: '转到分析页',
+    text: '下载完成后点这里进入「遥感数据分析」：选已下载影像，算 15 种指数、做两期变化与双屏对比，结果可导出 zip。',
+    padding: 6,
   },
 ]
 
