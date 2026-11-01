@@ -38,7 +38,7 @@ function fmtTime(ts) {
   if (!ts) return ''
   const d = new Date(ts * 1000)
   const p = (n) => String(n).padStart(2, '0')
-  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 // 第二行：波段数/体积/进度提示 + 发起时间

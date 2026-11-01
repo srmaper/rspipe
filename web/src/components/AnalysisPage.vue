@@ -492,7 +492,8 @@ async function toggleVector() {
 function fmtTime(ts) {
   if (!ts) return ''
   const d = new Date(ts * 1000)
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 async function loadHistoryList() {
   try {
