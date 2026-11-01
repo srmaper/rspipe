@@ -118,13 +118,20 @@
             <div v-if="!stats && !batch.length" class="hint">选择影像与指数后点击「开始计算」，或直接点「组合分析」。</div>
             <table v-if="batch.length" class="bt">
               <tr><th>指数</th><th>均值</th><th>有效面积</th><th>&gt;阈值</th></tr>
-              <tr v-for="b in batch" :key="b.index" :class="{ bad: !b.ok }">
+              <tr
+                v-for="b in batch"
+                :key="b.index"
+                :class="{ bad: !b.ok, active: batchActive === b.index }"
+                :title="b.ok ? '点击切换地图显示' : b.error"
+                @click="showBatchItem(b)"
+              >
                 <td>{{ b.index.toUpperCase() }}</td>
                 <td>{{ b.ok ? b.stats.mean : b.error }}</td>
                 <td>{{ b.ok ? b.stats.area_km2 + ' km²' : '-' }}</td>
                 <td>{{ b.ok ? (b.classify.above_area_km2 + ' km²') : '-' }}</td>
               </tr>
             </table>
+            <div v-if="batch.length" class="hint">点表格任一行可切换地图显示的指数</div>
             <table v-if="stats" class="kv" :style="batch.length ? 'margin-top:10px' : ''">
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
@@ -250,6 +257,7 @@ const TOUR_STEPS = [
 ]
 const resultVisible = ref(true)
 const batch = ref([])
+const batchActive = ref('')
 const comboBusy = ref('')
 const indexGroups = computed(() =>
   GROUP_ORDER.map((g) => ({ label: g, items: availableIndices.value.filter((i) => i.group === g) }))
@@ -375,6 +383,21 @@ async function loadScenes() {
   }
 }
 
+function showBatchItem(b) {
+  if (!b || !b.ok) return
+  batchActive.value = b.index
+  index.value = b.index
+  stats.value = { ...b.stats, ...b.classify }
+  tileTemplate.value = b.tiles
+  preview.value = { scene_id: sceneA.value, ready: true, bounds: b.stats.bounds }
+  hasSource.value = true
+  applySource(sceneA.value, b.stats.bounds)
+  mapRef.value?.setPreviewTiles(sceneA.value, 'rgb', '', '', b.stats.bounds)
+  vectorKey.value = sceneA.value
+  vectorName.value = b.index
+  vectorOp.value = 'above'
+  if (vectorOn.value) loadVector()
+}
 async function runCombo(c) {
   if (!sceneA.value || comboBusy.value) return
   comboBusy.value = c.key
@@ -396,18 +419,9 @@ async function runCombo(c) {
     batch.value = j.items || []
     const first = (j.items || []).find((x) => x.ok)
     if (first) {
-      index.value = first.index
-      stats.value = { ...first.stats, ...first.classify }
-      tileTemplate.value = first.tiles
-      preview.value = { scene_id: sceneA.value, ready: true, bounds: first.stats.bounds }
-      hasSource.value = true
-      applySource(sceneA.value, first.stats.bounds)
-      applyAoi(sceneA.value)
-      mapRef.value?.setPreviewTiles(sceneA.value, 'rgb', '', '', first.stats.bounds)
+      showBatchItem(first)
       mapRef.value?.fitBbox(first.stats.bounds)
-      vectorKey.value = sceneA.value
-      vectorName.value = first.index
-      vectorOp.value = 'above'
+      applyAoi(sceneA.value)
     }
     const okN = batch.value.filter((x) => x.ok).length
     logLn(`组合完成 ${okN}/${batch.value.length} · 地图显示 ${first ? first.index.toUpperCase() : '-'}`)
@@ -753,6 +767,8 @@ onMounted(async () => {
 .bt th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; }
 .bt td { padding: 3px 4px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .bt tr.bad td { color: #b91c1c; }
+.bt tbody tr, .bt tr { cursor: pointer; }
+.bt tr.active td { background: #eff6ff; }
 .seg { display: flex; gap: 6px; margin-top: 2px; }
 .seg button { flex: 1; }
 .row { margin-top: 10px; }
