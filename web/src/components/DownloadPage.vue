@@ -14,8 +14,8 @@
 
         <div id="tour-aoi">
           <AoiCard :bbox="bbox" :aoi-name="aoiName" :active="aoiTool"
-                   :area="aoiArea" :limit="AREA_LIMIT"
-                   @set="onToolBtn" @clear="clearAoi" />
+                   :area="aoiArea" :limit="AREA_LIMIT" :uploading="aoiUploading"
+                   @set="onToolBtn" @clear="clearAoi" @upload="onAoiUpload" />
         </div>
         <div id="tour-search">
           <SearchCard v-model:cfg="sCfg" :loading="searching" :bbox-ready="!!bbox" @search="onSearch" />
@@ -137,6 +137,7 @@ const activeScene = ref(null)
 const previewLayer = ref(null)
 const channels = ref('rgb')
 const aoiVisible = ref(true)
+const aoiUploading = ref(false)
 const channelsList = [
   { v: 'rgb', label: '真彩色' },
   { v: 'false', label: '假彩 NIR' },
@@ -160,7 +161,7 @@ const TOUR_STEPS = [
   {
     selector: '#tour-aoi',
     title: '设置下载范围',
-    text: '用「框选矩形」在地图上拖出范围，或用「位置搜索」输入地名。范围面积上限 5000 km²（约 70×70 km），超出会提示并阻止提交。',
+    text: '三种方式定范围：①「框选矩形」在地图上拖；②「位置搜索」输入地名；③「上传矢量」导入 shp（zip）/geojson/kml（需 WGS84 坐标系）。面积上限 5000 km²（约 70×70 km），超出会提示并阻止提交。',
   },
   {
     selector: '#tour-search',
@@ -263,6 +264,55 @@ function applyFetchedAoi(a) {
   mapRef.value?.setAoiPolygon(g)
   setAoiArea(ring, bbox.value)
 }
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const s = String(reader.result || '')
+      resolve(s.includes(',') ? s.slice(s.indexOf(',') + 1) : s)
+    }
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onAoiUpload(file) {
+  if (!file || aoiUploading.value) return
+  if (!/\.(shp|geojson|json|kml|zip)$/i.test(file.name)) {
+    showToast('只支持 shp（zip 打包）、geojson、kml', 'error', 3600)
+    return
+  }
+  aoiUploading.value = true
+  logLn(`上传矢量 ${file.name} …`)
+  try {
+    const data = await fileToBase64(file)
+    const r = await fetch('/api/aoi/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name, data }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || !j.ok) {
+      const detail = j.detail || j.error || `HTTP ${r.status}`
+      showToast('矢量文件有问题，请重新上传', 'error', 4200)
+      logLn(`矢量文件有问题：${detail}`)
+      return
+    }
+    applyFetchedAoi({ id: 'upload', name: j.name, geometry: j.geometry })
+    aoiTool.value = null
+    mapRef.value?.setDrawMode(null)
+    logLn(`矢量边界 ${j.name} · ${j.features} 个面 · ${j.area_km2.toFixed(1)} km²`)
+    if (j.area_km2 > AREA_LIMIT) {
+      showToast(`范围 ${j.area_km2.toFixed(0)} km² 超出上限 ${AREA_LIMIT} km²，请缩小后再检索`, 'error', 4200)
+    }
+  } catch (e) {
+    showToast('矢量文件有问题，请重新上传', 'error', 4200)
+    logLn('上传失败: ' + (e.message || e))
+  } finally {
+    aoiUploading.value = false
+  }
+}
+
 function applyAoi(id) {
   const a = aois.value.find(v => v.id === id)
   if (a) { applyFetchedAoi(a); logLn(`AOI 预设: ${a.name}`) }

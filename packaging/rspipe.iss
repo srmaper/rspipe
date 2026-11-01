@@ -1,9 +1,9 @@
 ; rspipe 安装包脚本（Inno Setup 6）
 ; 编译： "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\rspipe.iss
-; 产物： dist\rspipe-1.1.1-setup.exe
+; 产物： dist\rspipe-1.1.2-setup.exe
 
 #define MyAppName "rspipe 遥感影像平台"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "rspipe"
 #define MyAppExeName "rspipe.exe"
 

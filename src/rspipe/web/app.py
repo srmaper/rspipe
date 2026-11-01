@@ -382,6 +382,30 @@ def create_app() -> FastAPI:
         raise HTTPException(404, f"{scene_id} not found on {provider}")
 
     # ---------- AOI ----------
+    @app.post("/api/aoi/upload")
+    def api_aoi_upload(body: dict) -> dict:
+        """解析上传的矢量文件（shp zip / geojson / kml），返回 WGS84 面。"""
+        import base64
+
+        from rspipe.web.vector_io import parse_vector_bytes
+
+        name = str(body.get("name") or "").strip()
+        payload = body.get("data") or ""
+        if not name or not payload:
+            raise HTTPException(422, "缺少文件内容")
+        try:
+            raw = base64.b64decode(payload)
+        except Exception as exc:
+            raise HTTPException(400, "文件内容无法解析") from exc
+        if len(raw) > 60 * 1024 * 1024:
+            raise HTTPException(413, "文件过大（上限 60 MB）")
+        try:
+            return parse_vector_bytes(name, raw)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(400, f"矢量文件解析失败：{exc}") from exc
+
     @app.get("/api/aoi")
     def api_aoi() -> list[dict]:
         layout_configs = ROOT / "configs"
