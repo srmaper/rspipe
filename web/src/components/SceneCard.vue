@@ -15,7 +15,7 @@
       <button
         class="primary"
         :disabled="busy || downloadOk"
-        :title="'按当前 AOI 裁剪下载（≤500 km²）'"
+        :title="'按当前 AOI 裁剪下载（≤5000 km²）'"
         @click="downloadOk ? null : $emit('download', scene, 'aoi')"
       >
         {{ downloadOk ? '✔ 已下载' : busy ? btnText : 'AOI 下载' }}

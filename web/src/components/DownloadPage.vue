@@ -160,7 +160,7 @@ const TOUR_STEPS = [
   {
     selector: '#tour-aoi',
     title: '设置下载范围',
-    text: '用「框选矩形」在地图上拖出范围，或用「位置搜索」输入地名。范围面积上限 500 km²（约 22×22 km），超出会提示并阻止提交。',
+    text: '用「框选矩形」在地图上拖出范围，或用「位置搜索」输入地名。范围面积上限 5000 km²（约 70×70 km），超出会提示并阻止提交。',
   },
   {
     selector: '#tour-search',
@@ -195,7 +195,7 @@ function startTour() {
   tourOpen.value = true
 }
 const aoiArea = ref(0)          // AOI 面积 km²
-const AREA_LIMIT = 500          // 单次下载面积上限 km²
+const AREA_LIMIT = 5000         // 单次下载面积上限 km²
 let toastTimer = null
 function showToast(m, kind = 'info') {
   msgBox.value?.toast(m, kind)

@@ -26,7 +26,7 @@ const props = defineProps({
   aoiName: String,
   active: String,   // 'rect' | 'poly' | 'search' | null —— 三按钮互斥单选
   area: { type: Number, default: 0 },
-  limit: { type: Number, default: 500 },
+  limit: { type: Number, default: 5000 },
 })
 defineEmits(['set', 'clear'])
 const busy = computed(() => !!props.bbox || !!props.aoiName)
