@@ -7,12 +7,13 @@
           <button class="x" @click="$emit('close')">✕</button>
         </div>
 
-        <div class="grid">
-          <article v-for="t in TOOLS" :key="t.name" class="tcard">
+        <!-- 通用说明：两期变化 + 前提条件 + 常见问题 -->
+        <h4 class="cat-h">通用说明</h4>
+        <div class="grid general">
+          <article v-for="t in GENERAL" :key="t.name" class="tcard">
             <div class="tt">
               <b>{{ t.name }}</b>
               <span class="cn">{{ t.cn }}</span>
-              <span v-if="t.group" class="grp">{{ t.group }}</span>
             </div>
             <div class="f">{{ t.formula }}</div>
             <dl>
@@ -42,13 +43,47 @@
             </dl>
           </article>
         </div>
+
+        <!-- 具体分析单元：按类别分组 -->
+        <section v-for="g in INDEX_GROUPS" :key="g.label" class="cat">
+          <h4 class="cat-h">{{ g.label }} <span class="muted">（{{ g.items.length }}）</span></h4>
+          <div class="grid">
+            <article v-for="t in g.items" :key="t.name" class="tcard">
+              <div class="tt">
+                <b>{{ t.name }}</b>
+                <span class="cn">{{ t.cn }}</span>
+              </div>
+              <div class="f">{{ t.formula }}</div>
+              <dl>
+                <dt>所需栅格</dt><dd>{{ t.bands }}</dd>
+                <dt>参数</dt><dd>{{ t.param }}</dd>
+                <dt>结果</dt><dd>{{ t.result }}</dd>
+              </dl>
+            </article>
+          </div>
+        </section>
       </div>
     </div>
   </teleport>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 defineEmits(['close'])
+
+// 通用：两期变化（不挂在具体指数分类下）
+const GENERAL = [
+  {
+    name: '两期变化', cn: '变化检测',
+    formula: 'Δ = 指数(后期) - 指数(前期)',
+    bands: '两景同一指数（系统自动补算缺失的一期）',
+    param: '变化阈值默认 0.1：|Δ| < 阈值视为无变化',
+    result: '红=下降、白=无变化、绿=上升；统计平均变化、减少/增加/重叠面积；输出 {A}__{B}/{指数}_change.tif',
+  },
+]
+
+const INDEX_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分']
 
 const TOOLS = [
   {
@@ -156,14 +191,13 @@ const TOOLS = [
     param: '阈值默认 0.15（>阈值偏盐渍化）',
     result: '盐渍化/干旱区土壤盐分相对高低；输出 {景}/si.tif',
   },
-  {
-    name: '两期变化', cn: '变化检测', group: '两期',
-    formula: 'Δ = 指数(后期) - 指数(前期)',
-    bands: '两景同一指数（系统自动补算缺失的一期）',
-    param: '变化阈值默认 0.1：|Δ| < 阈值视为无变化',
-    result: '红=下降、白=无变化、绿=上升；统计平均变化、减少/增加/重叠面积；输出 {A}__{B}/{指数}_change.tif',
-  },
 ]
+
+const INDEX_GROUPS = computed(() =>
+  INDEX_ORDER.map((g) => ({ label: g, items: TOOLS.filter((t) => t.group === g) })).filter(
+    (g) => g.items.length,
+  ),
+)
 </script>
 
 <style scoped>
@@ -177,12 +211,17 @@ const TOOLS = [
 .hd h3 { margin: 0; font-size: 15px; }
 .x { flex: none; min-height: 26px; padding: 2px 9px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.general { margin-bottom: 4px; }
+.cat-h {
+  margin: 16px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--muted);
+  border-bottom: 1px dashed var(--line); padding-bottom: 4px;
+}
+.cat:first-of-type .cat-h { margin-top: 6px; }
 .tcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; box-shadow: var(--shadow); }
 .tcard.info { background: var(--track); }
 .tt { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .tt b { font-size: 13px; }
 .cn { color: var(--muted); font-size: 11.5px; }
-.grp { margin-left: auto; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; white-space: nowrap; }
 .f { font-family: Consolas, monospace; font-size: 11.5px; color: var(--accent); background: #f5f9ff; border: 1px solid #dbeafe; border-radius: 6px; padding: 4px 6px; margin-bottom: 8px; word-break: break-all; }
 dl { margin: 0; font-size: 11.5px; }
 dt { color: var(--muted); margin-top: 6px; }
