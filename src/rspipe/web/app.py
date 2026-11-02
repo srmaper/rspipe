@@ -774,9 +774,59 @@ def create_app() -> FastAPI:
     def api_update_check(force: bool = False) -> dict:
         """查询 GitHub Releases 最新版本（磁盘缓存 6 小时，失败静默）。"""
         from rspipe import __version__
+        from rspipe.web import updater
         from rspipe.web.update import check_update
 
-        return check_update(Path(cfg.data_root), __version__, force=force)
+        info = check_update(Path(cfg.data_root), __version__, force=force)
+        info["can_auto"] = updater.can_auto_install()
+        return info
+
+    @app.post("/api/update/download")
+    def api_update_download() -> dict:
+        """后台下载最新安装包（进度用 /api/update/status 轮询）。"""
+        from rspipe import __version__
+        from rspipe.web import updater
+        from rspipe.web.update import check_update
+
+        info = check_update(Path(cfg.data_root), __version__, force=True)
+        if not info.get("has_update"):
+            return {"ok": False, "error": "已是最新版本"}
+        if not info.get("asset"):
+            return {"ok": False, "error": "未找到安装包下载地址"}
+        st = updater.start_download(
+            Path(cfg.data_root),
+            info["asset"],
+            info.get("asset_name") or "",
+            info.get("latest") or "",
+        )
+        return {"ok": True, **st}
+
+    @app.get("/api/update/status")
+    def api_update_status() -> dict:
+        from rspipe.web import updater
+
+        return updater.state()
+
+    @app.post("/api/update/install")
+    def api_update_install() -> dict:
+        """静默安装并重启（会先让本进程退出）。"""
+        from rspipe.web import updater
+
+        return updater.apply(Path(cfg.data_root))
+
+    @app.middleware("http")
+    async def _cache_headers(request, call_next):
+        resp = await call_next(request)
+        path = request.url.path
+        if path.startswith("/assets/"):
+            # 构建产物文件名带 hash，可长期缓存
+            resp.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        elif path == "/" or path.endswith(".html"):
+            # 入口页永不缓存：升级后立刻拿到新版本的资源清单
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        return resp
 
     # ---------- 瓦片（本地 COG 优先；缺失时直接读云端金字塔层做整景预览） ----------
     @app.get("/api/tiles/{scene_id}/{z}/{x}/{y}.png")
