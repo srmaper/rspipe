@@ -11,7 +11,7 @@
     <div id="top">
       <!-- 左栏 -->
       <div id="left">
-        <button class="primary guide-btn" id="tour-guide" @click="tourOpen = true">操作指引</button>
+        <button class="primary guide-btn" id="tour-guide" @click="startTour">操作指引</button>
         <button class="primary guide-btn" id="tour-guide-modal" @click="guideOpen = true">分析指南</button>
 
         <div class="card" id="tour-setup">
@@ -654,6 +654,10 @@ function applyDefaultThreshold() {
 }
 watch(index, applyDefaultThreshold)
 watch(mode, applyDefaultThreshold)
+function startTour() {
+  tourAutoplay.value = true
+  tourOpen.value = true
+}
 function closeTour() {
   tourOpen.value = false
   tourAutoplay.value = false

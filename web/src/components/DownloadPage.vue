@@ -200,7 +200,7 @@ const TOUR_STEPS = [
 ]
 
 function startTour() {
-  tourAutoplay.value = false
+  tourAutoplay.value = true
   tourOpen.value = true
 }
 function closeTour() {

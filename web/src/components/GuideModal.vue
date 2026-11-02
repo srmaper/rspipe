@@ -36,6 +36,7 @@
             </div>
             <div class="f">{{ t.formula }}</div>
             <dl>
+              <dt>意义</dt><dd>{{ t.meaning }}</dd>
               <dt>所需栅格</dt><dd>{{ t.bands }}</dd>
               <dt>参数</dt><dd>{{ t.param }}</dd>
               <dt>结果</dt><dd>{{ t.result }}</dd>
@@ -55,6 +56,7 @@
               </div>
               <div class="f">{{ t.formula }}</div>
               <dl>
+                <dt>意义</dt><dd>{{ t.meaning }}</dd>
                 <dt>所需栅格</dt><dd>{{ t.bands }}</dd>
                 <dt>参数</dt><dd>{{ t.param }}</dd>
                 <dt>结果</dt><dd>{{ t.result }}</dd>
@@ -77,6 +79,7 @@ const GENERAL = [
   {
     name: '两期变化', cn: '变化检测',
     formula: 'Δ = 指数(后期) - 指数(前期)',
+    meaning: '对比同一地区两个日期，判断植被长势、水体、建成区或火烧迹地的变化方向与面积，用于动态监测与成效评估。',
     bands: '两景同一指数（系统自动补算缺失的一期）',
     param: '变化阈值默认 0.1：|Δ| < 阈值视为无变化',
     result: '红=下降、白=无变化、绿=上升；统计平均变化、减少/增加/重叠面积；输出 {A}__{B}/{指数}_change.tif',
@@ -85,7 +88,7 @@ const GENERAL = [
 
 const INDEX_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分']
 
-const TOOLS = [
+const TOOLS_RAW = [
   {
     name: 'NDVI', cn: '植被指数', group: '植被',
     formula: '(NIR - Red) / (NIR + Red)',
@@ -192,6 +195,25 @@ const TOOLS = [
     result: '盐渍化/干旱区土壤盐分相对高低；输出 {景}/si.tif',
   },
 ]
+
+const MEANING = {
+  NDVI: '反映植被覆盖度与生长活力，是区分植被/非植被、做长势分级最常用的指标。',
+  EVI: '在浓密植被下不易饱和，适合森林与旺盛期农田；对大气气溶胶有一定抑制。',
+  SAVI: '削弱土壤亮度影响，适合干旱区、稀疏植被与作物出苗早期的长势判断。',
+  NDRE: '红边波段对叶绿素更敏感，可比 NDVI 更早发现作物胁迫、缺氮与病虫害。',
+  NDWI: '突出地表水体，用于湖泊/河流范围提取与季节水位变化监测。',
+  MNDWI: '抑制建筑与阴影干扰，城市、山地水体提取更完整，是水体提取首选。',
+  AWEI: '在城区与山地阴影等复杂场景下自动提取水体，漏提和误提都更少。',
+  FAI: '识别水面藻类聚集区（水华），用于湖库富营养化与水质异常排查。',
+  NDBI: '识别建成区/不透水面，用于城市扩张、建设用地变化与违建排查。',
+  BSI: '反映裸土与扰动地表，适合施工、采矿、荒漠化与植被退化判读。',
+  NBR: '用于火烧迹地识别与过火严重度分级，配合两期差值（dNBR）效果最好。',
+  NBR2: '对燃烧残留和地表水分更敏感，辅助 NBR 区分火烧与其他扰动。',
+  NDMI: '反映植被冠层含水量，用于干旱胁迫、灌溉效果与旱情评估。',
+  NDSI: '提取积雪范围，用于雪线变化、融雪期与流域补给的监测。',
+  SI: '反映土壤盐分高低，用于干旱灌区次生盐渍化与盐碱地排查。',
+}
+const TOOLS = TOOLS_RAW.map((t) => ({ ...t, meaning: MEANING[t.name] || '' }))
 
 const INDEX_GROUPS = computed(() =>
   INDEX_ORDER.map((g) => ({ label: g, items: TOOLS.filter((t) => t.group === g) })).filter(

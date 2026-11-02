@@ -9,7 +9,7 @@
       <section class="card big" @click="$emit('go', 'download')">
         <div class="ico">🛰</div>
         <h2>下载遥感影像</h2>
-        <p>圈选范围或搜索地名，检索场景后选择波段下载；自动生成 4326 预览栅格与 AOI 记录，支持真彩 / 假彩 / NDVI 预览</p>
+        <p>圈选范围或搜索地名，检索场景后选择波段下载；自动生成 4326 预览栅格与 AOI 记录，支持真彩 / 假彩 NIR 预览与拉伸切换</p>
         <span class="go">进入 →</span>
       </section>
 
