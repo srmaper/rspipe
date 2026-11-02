@@ -103,13 +103,12 @@ def _window_for_tile(src: rasterio.io.DatasetReader, z: int, x: int, y: int):
     return Window(col, row, w, h)
 
 
-def _tone_rgb(rgb: np.ndarray, shoulder: float = 0.8) -> np.ndarray:
-    """真彩色高光肩部：只压缩最亮的一段，压掉 2%~98% 线性拉伸的过曝，不动中间调。
-
-    rgb: (3, H, W) 0-255。shoulder=0.8 表示 80% 以上按 tanh 软压缩到 1.0。
-    """
+def _tone_rgb(rgb: np.ndarray, mode: str = "auto") -> np.ndarray:
+    """真彩色调：auto=高光肩部（压过曝，不动中间调）；none=无拉伸+gamma 0.6（贴近 ArcGIS 观感）。"""
     x = np.clip(rgb, 0, 255) / 255.0
-    a = shoulder
+    if mode == "none":
+        return np.clip(np.power(x, 0.6), 0.0, 1.0) * 255.0
+    a = 0.8
     x = np.where(x <= a, x, a + (1.0 - a) * np.tanh((x - a) / (1.0 - a)))
     return np.clip(x, 0.0, 1.0) * 255.0
 
@@ -137,6 +136,7 @@ def render_tile(
     x: int,
     y: int,
     channels: str = "rgb",  # rgb | false | ndvi
+    stretch: str = "auto",
 ) -> bytes | None:
     """渲染一张矢量-free 光栅 PNG；窗口完全在外则返回 None。"""
     with rasterio.open(cog_path) as src:
@@ -174,7 +174,7 @@ def render_tile(
             valid = np.isfinite(stack[0]) & np.isfinite(stack[1]) & np.isfinite(stack[2])
             rgb = _stretch_rgb(stack, valid)
             if channels == "rgb":
-                rgb = _tone_rgb(rgb)
+                rgb = _tone_rgb(rgb, stretch)
 
         img = Image.fromarray(rgb.transpose(1, 2, 0).astype("uint8"), mode="RGB")
         buf = io.BytesIO()
@@ -242,7 +242,12 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
 
 
 def render_cog_tile_subrect(
-    cog_path: Path, z: int, x: int, y: int, channels: str = "rgb"
+    cog_path: Path,
+    z: int,
+    x: int,
+    y: int,
+    channels: str = "rgb",
+    stretch: str = "auto",
 ) -> bytes | None:
     """COG 瓦片：按交集子矩形拼到 256 画布，无值区透明；有效像元<1% 返回 None。"""
     import io
@@ -279,13 +284,19 @@ def render_cog_tile_subrect(
     else:
         stack = np.stack(chans)
         valid = np.isfinite(stack).all(axis=0) & (stack.sum(axis=0) > 0)
-        ranges = _cog_ranges(cog_path)
+        ranges = (
+            {1: (0.0, 1.0), 2: (0.0, 1.0), 3: (0.0, 1.0), 4: (0.0, 1.0)}
+            if stretch == "none"
+            else _cog_ranges(cog_path)
+        )
         rgb = np.zeros(stack.shape, dtype="float32")
         for i, bi in enumerate(idx):
             lo, hi = ranges.get(bi, (0.0, 0.30))
             if hi <= lo:
                 hi = lo + 1e-6
             rgb[i] = np.where(valid, np.clip((stack[i] - lo) / (hi - lo) * 255.0, 0, 255), 0)
+        if channels == "rgb":
+            rgb = _tone_rgb(rgb, stretch)
     if valid.mean() < 0.002:
         return None
     rgba = np.zeros((TILE, TILE, 4), dtype="uint8")
@@ -298,7 +309,12 @@ def render_cog_tile_subrect(
 
 
 def render_raster_tile(
-    raster_path: Path, z: int, x: int, y: int, channels: str = "rgb"
+    raster_path: Path,
+    z: int,
+    x: int,
+    y: int,
+    channels: str = "rgb",
+    stretch: str = "auto",
 ) -> bytes | None:
     """多波段栅格（1=red,2=green,3=blue,4=nir，反射率）→ 瓦片 PNG。
 
@@ -350,7 +366,11 @@ def render_raster_tile(
         rgb = _ndvi_lut(np.clip(nd, -1, 1), valid)
     else:
         valid = np.isfinite(canvas).all(axis=0) & (canvas.sum(axis=0) > 0)
-        ranges = _cog_ranges(raster_path)
+        ranges = (
+            {1: (0.0, 1.0), 2: (0.0, 1.0), 3: (0.0, 1.0), 4: (0.0, 1.0)}
+            if stretch == "none"
+            else _cog_ranges(raster_path)
+        )
         rgb = np.zeros(canvas.shape, dtype="float32")
         for i, bi in enumerate(idx):
             lo, hi = ranges.get(bi, (0.0, 0.30))
@@ -358,7 +378,7 @@ def render_raster_tile(
                 hi = lo + 1e-6
             rgb[i] = np.where(valid, np.clip((canvas[i] - lo) / (hi - lo) * 255.0, 0, 255), 0)
         if channels == "rgb":
-            rgb = _tone_rgb(rgb)
+            rgb = _tone_rgb(rgb, stretch)
 
     if valid.mean() < 0.002:
         return None

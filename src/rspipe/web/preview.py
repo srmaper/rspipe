@@ -133,7 +133,9 @@ def _stretch_fixed(ranges, keys, stacks) -> tuple[np.ndarray, np.ndarray]:
     return out, valid
 
 
-def _compose(channels: str, stacks: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+def _compose(
+    channels: str, stacks: list[np.ndarray], stretch: str = "auto"
+) -> tuple[np.ndarray, np.ndarray]:
     if channels == "ndvi":
         red, nir = stacks[0], stacks[1]
         with np.errstate(invalid="ignore"):
@@ -145,7 +147,7 @@ def _compose(channels: str, stacks: list[np.ndarray]) -> tuple[np.ndarray, np.nd
         valid = np.isfinite(stack).all(axis=0) & (stack.sum(axis=0) > 0)
         rgb = _stretch_rgb(stack, valid)
         if channels == "rgb":
-            rgb = _tone_rgb(rgb)
+            rgb = _tone_rgb(rgb, stretch)
     return rgb, valid
 
 
@@ -172,6 +174,7 @@ def render_local_tile(
     x: int,
     y: int,
     channels: str = "rgb",
+    stretch: str = "auto",
 ) -> bytes | None:
     import rasterio
     from rasterio.enums import Resampling
@@ -212,9 +215,13 @@ def render_local_tile(
         rgb, valid = _compose(channels, stacks)
     else:
         scale = "landsat" if "landsat" in collection else "s2"
-        rgb, valid = _stretch_fixed(_ranges_for_raw(raw_dir, keys, scale), keys, stacks)
+        if stretch == "none":
+            ranges = dict.fromkeys(keys, (0.0, 1.0))
+        else:
+            ranges = _ranges_for_raw(raw_dir, keys, scale)
+        rgb, valid = _stretch_fixed(ranges, keys, stacks)
         if channels == "rgb":
-            rgb = _tone_rgb(rgb)
+            rgb = _tone_rgb(rgb, stretch)
     return _png(rgb, valid)
 
 
@@ -228,6 +235,7 @@ def render_remote_tile(
     x: int,
     y: int,
     channels: str = "rgb",
+    stretch: str = "auto",
 ) -> bytes | None:
     keys = _KEYS.get(channels, _KEYS["rgb"])
     b = tile_bounds(z, x, y)
@@ -268,6 +276,8 @@ def render_remote_tile(
     if not got_any:
         return None
     rgb, valid = _compose(
-        channels, [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]]
+        channels,
+        [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]],
+        stretch,
     )
     return _png(rgb, valid)

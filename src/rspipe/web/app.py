@@ -476,8 +476,13 @@ def create_app() -> FastAPI:
         from rspipe.web.cleanup import delete_scene_data
 
         removed = delete_scene_data(Path(cfg.data_root), job.provider, job.scene_id)
-        center.jobs.pop(job_id, None)
+        center.remove(job_id)
         return removed
+
+    @app.post("/api/jobs/clear")
+    def api_jobs_clear() -> dict:
+        """清空已完成/失败的任务记录（只清列表，不删已下载文件）。"""
+        return {"removed": center.clear_finished()}
 
     @app.websocket("/ws/jobs")
     async def ws_jobs(ws: WebSocket):
@@ -735,12 +740,12 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/analysis/source/{key}/{z}/{x}/{y}.png")
-    def api_analysis_source_tile(key: str, z: int, x: int, y: int):
+    def api_analysis_source_tile(key: str, z: int, x: int, y: int, stretch: str = "auto"):
         """分析目录里的原始影像（source_4326.tif）→ 真彩瓦片。"""
         f = Path(cfg.data_root) / "analysis" / key / "source_4326.tif"
         if not f.exists():
             return Response(status_code=204)
-        data = render_raster_tile(f, z, x, y, "rgb")
+        data = render_raster_tile(f, z, x, y, "rgb", stretch)
         if data is None:
             return Response(status_code=204)
         return Response(
@@ -783,10 +788,11 @@ def create_app() -> FastAPI:
         channels: str = "rgb",
         provider: str = "",
         collection: str = "",
+        stretch: str = "auto",
     ):
         cog = Path(cfg.data_root) / "derived" / "cog" / f"{scene_id}.tif"
         if cog.exists():
-            data = render_cog_tile_subrect(cog, z, x, y, channels)
+            data = render_cog_tile_subrect(cog, z, x, y, channels, stretch)
             if data is not None:
                 return Response(
                     content=data,
@@ -797,7 +803,7 @@ def create_app() -> FastAPI:
         if provider:
             pv = Path(cfg.data_root) / "raw" / provider / scene_id / f"{scene_id}.preview_4326.tif"
             if pv.exists():
-                data = render_raster_tile(pv, z, x, y, channels)
+                data = render_raster_tile(pv, z, x, y, channels, stretch)
                 if data is not None:
                     return Response(
                         content=data,
@@ -810,7 +816,15 @@ def create_app() -> FastAPI:
 
             try:
                 data = render_local_tile(
-                    Path(cfg.data_root), provider, collection or "", scene_id, z, x, y, channels
+                    Path(cfg.data_root),
+                    provider,
+                    collection or "",
+                    scene_id,
+                    z,
+                    x,
+                    y,
+                    channels,
+                    stretch,
                 )
             except Exception as exc:
                 log.warning("local raw tile failed %s: %s", scene_id, exc)

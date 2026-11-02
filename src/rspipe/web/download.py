@@ -15,6 +15,35 @@ def local_raw(layout, provider: str, scene_id: str, key: str) -> Path | None:
     return p if p.exists() else None
 
 
+def _bbox_covers(outer, inner, eps: float = 1e-6) -> bool:
+    """outer 是否完整包含 inner（都是 4326 经纬度）。"""
+    return (
+        outer[0] <= inner[0] + eps
+        and outer[1] <= inner[1] + eps
+        and outer[2] >= inner[2] - eps
+        and outer[3] >= inner[3] - eps
+    )
+
+
+def _existing_bbox(out_dir: Path, scene_id: str, keys) -> tuple | None:
+    """已下载波段在 4326 下的实际覆盖范围（取第一个存在的波段）。"""
+    import rasterio
+    from rasterio.warp import transform_bounds
+
+    for k in keys:
+        f = out_dir / f"{scene_id}.{k}.tif"
+        if not f.exists():
+            continue
+        try:
+            with rasterio.open(f) as d:
+                if d.crs is None:
+                    return None
+                return tuple(transform_bounds(d.crs, "EPSG:4326", *d.bounds))
+        except Exception:
+            return None
+    return None
+
+
 def download_scene_raw(
     pipe,
     layout,
@@ -28,6 +57,7 @@ def download_scene_raw(
     block_size=1 << 19,
     workers=6,
     should_stop=None,
+    notes: list[str] | None = None,
 ) -> Path:
     """raw AOI 裁剪下载（512KB 块 + RangeFile 预取并发，已存在文件跳过）。
 
@@ -65,12 +95,31 @@ def download_scene_raw(
     out_dir = layout.raw_scene_dir(provider, scene_id)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # 已有裁剪结果是否够用：够 → 跳过（续传）；不够 → 并集重裁（同一景换个区域下载）
+    reuse = True
+    have = _existing_bbox(out_dir, scene_id, keys)
+    if have is not None:
+        target = tuple(scene.bbox) if bbox is None else tuple(bbox)
+        if not _bbox_covers(have, target):
+            reuse = False
+            if bbox is not None:
+                bbox = (
+                    min(have[0], bbox[0]),
+                    min(have[1], bbox[1]),
+                    max(have[2], bbox[2]),
+                    max(have[3], bbox[3]),
+                )
+                if notes is not None:
+                    notes.append("已扩边，原区域保留")
+                if progress:
+                    progress(0.01, "AOI 超出已下载范围，扩边重下（原区域保留）…")
+
     def one(key: str) -> Path:
         import rasterio
         from affine import Affine
 
         dest = out_dir / f"{scene_id}.{key}.tif"
-        if dest.exists():
+        if dest.exists() and reuse:
             return dest
         asset = scene.asset_by_key(key)
         href = sign_href(asset.href) if needs_signing(asset.href) else asset.href

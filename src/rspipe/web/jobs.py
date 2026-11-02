@@ -149,8 +149,14 @@ class JobCenter:
             con.close()
         except Exception:
             return
+        stale: list[str] = []
+        kept = 0
         for r in rows:
             try:
+                if r[6] in ("queued", "running", "paused"):
+                    # 重启后这些状态没有意义（进程已退出）：直接丢弃，不留在列表里
+                    stale.append(r[0])
+                    continue
                 job = Job(
                     id=r[0],
                     kind=r[1],
@@ -164,13 +170,27 @@ class JobCenter:
                     detail=_json.loads(r[9] or "{}"),
                     created=r[10],
                 )
-                # 服务重启时被打断的任务标记为失败（重试按钮仍在景卡片）
-                if job.status in ("queued", "running"):
-                    job.status = "error"
-                    job.message = "已中断（可续传，已完成波段会跳过）"
                 self.jobs[job.id] = job
+                kept += 1
+                if kept > 30:
+                    stale.append(job.id)
             except Exception:
                 continue
+        if stale:
+            self._db_delete(stale)
+
+    def remove(self, job_id: str) -> None:
+        """从列表移除一条任务记录（不动物料文件），同时落库删除。"""
+        self.jobs.pop(job_id, None)
+        self._cancels.pop(job_id, None)
+        self._db_delete([job_id])
+
+    def clear_finished(self) -> int:
+        """清掉已结束（完成/失败）的任务记录，返回清理条数；下载的文件不受影响。"""
+        ids = [jid for jid, j in self.jobs.items() if j.status in ("ok", "error")]
+        for jid in ids:
+            self.remove(jid)
+        return len(ids)
 
     # ---- 查询 ----
     def snapshot(self) -> list[dict]:
@@ -292,6 +312,7 @@ class JobCenter:
             from rspipe.web.download import download_scene_raw
 
             if job.kind == "raw":
+                notes: list[str] = []
                 download_scene_raw(
                     self._pipe,
                     self._layout,
@@ -302,10 +323,11 @@ class JobCenter:
                     keys=job.detail.get("bands"),
                     progress=lambda f, m: self._prog(job, f, m),
                     should_stop=self._should_stop(job),
+                    notes=notes,
                 )
                 job.status = "ok"
                 job.progress = 1.0
-                job.message = "raw 完成"
+                job.message = "raw 完成" + (f"（{notes[0]}）" if notes else "")
             else:
                 self._prog(job, 0.0, "准备 …")
                 scene = self._pipe.clients[job.provider].search(ids=[job.scene_id], max_items=1)[0]
