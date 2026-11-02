@@ -124,6 +124,44 @@ def _local_bands(data_root, provider: str, scene_id: str) -> list[str]:
     )
 
 
+def _local_scene_info(data_root, provider: str, scene_id: str) -> dict | None:
+    """仅用本地文件组装场景信息；没有 raw 时返回 None。"""
+    d = Path(data_root) / "raw" / provider / scene_id
+    if not d.is_dir():
+        return None
+    bounds = _raw_bounds(data_root, provider, scene_id)
+    if not bounds:
+        return None
+    footprint = None
+    aoi = d / "aoi.geojson"
+    if aoi.exists():
+        try:
+            gj = json.loads(aoi.read_text(encoding="utf-8"))
+            feats = gj.get("features") or []
+            if feats:
+                footprint = feats[0].get("geometry")
+        except Exception:
+            footprint = None
+    bands = _local_bands(data_root, provider, scene_id)
+    return {
+        "scene_id": scene_id,
+        "provider": provider,
+        "collection": _collection_of_scene(provider, scene_id),
+        "datetime": "",
+        "cloud_cover": None,
+        "tier": None,
+        "footprint": footprint,
+        "bbox": bounds,
+        "properties": {},
+        "bands": bands,
+        "band_info": [],
+        "local_bands": bands,
+        "raw_bounds": bounds,
+        "cog_bounds": _cog_bounds(data_root, scene_id),
+        "local": True,
+    }
+
+
 def _has_raw(data_root, provider: str, scene_id: str) -> bool:
     d = Path(data_root) / "raw" / provider / scene_id
     try:
@@ -355,6 +393,10 @@ def create_app() -> FastAPI:
     def api_scene(provider: str, scene_id: str) -> dict:
         if provider not in PROVIDERS_MAP:
             raise HTTPException(404, f"unknown provider {provider}")
+        # 本地已有 raw 裁剪时直接返回本地信息（不走 STAC，秒回；离线也能预览）
+        local = _local_scene_info(cfg.data_root, provider, scene_id)
+        if local is not None:
+            return local
         for _coll in PROVIDERS_MAP[provider][1]:
             hits = pipe.clients[provider].search(ids=[scene_id], max_items=1)
             if hits:
@@ -726,7 +768,13 @@ def create_app() -> FastAPI:
         except (TypeError, ValueError) as exc:
             raise HTTPException(422, f"threshold 非法：{exc}") from exc
         op = "abs" if str(body.get("op") or "above") == "abs" else "above"
-        return vectorize_index(Path(cfg.data_root), key, name, threshold, op=op)
+        try:
+            min_area = float(body.get("min_area", 10.0))
+        except (TypeError, ValueError):
+            min_area = 10.0
+        return vectorize_index(
+            Path(cfg.data_root), key, name, threshold, op=op, min_area_m2=max(0.0, min_area)
+        )
 
     @app.get("/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png")
     def api_analysis_tile(key: str, name: str, z: int, x: int, y: int):

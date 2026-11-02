@@ -9,6 +9,15 @@
     </div>
     <label>整景云量上限：{{ cfg.cloud }}%</label>
     <input type="range" min="0" max="80" v-model.number="cfg.cloud" style="width:100%" />
+    <label>覆盖率下限：{{ cfg.minOverlapPct }}%（AOI 被影像覆盖的比例）</label>
+    <input
+      type="range"
+      min="20"
+      max="100"
+      step="5"
+      v-model.number="cfg.minOverlapPct"
+      style="width:100%"
+    />
     <label>云量口径</label>
     <select v-model="cfg.cloud_mode" style="width:100%">
       <option value="scene">整景云量（快，约 1 秒）</option>
@@ -48,6 +57,7 @@ function go() {
     end: cfg.end + 'T23:59:59Z',
     cloud: cfg.cloud,
     cloud_mode: cfg.cloud_mode || 'scene',
+    min_overlap: (cfg.minOverlapPct ?? 100) / 100,
     providers: cfg.providers,
   })
 }

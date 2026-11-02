@@ -62,6 +62,9 @@
             v-model.number="threshold"
           />
 
+          <label>生成矢量剔除最小面积（m²）：<span class="muted">小于此面积的面不输出</span></label>
+          <input type="number" min="0" step="5" v-model.number="minAreaM2" style="width:100%" />
+
           <div class="row">
             <button class="primary" id="tour-run" :disabled="!canRun || running" @click="run">
               {{ running ? '计算中…' : '开始计算' }}
@@ -256,6 +259,7 @@ const sceneA = ref('')
 const sceneB = ref('')
 const index = ref('ndvi')
 const threshold = ref(0.3)
+const minAreaM2 = ref(10)   // 转矢量时剔除的碎斑面积（平方米）
 const meta = ref({})
 const running = ref(false)
 const error = ref('')
@@ -480,6 +484,7 @@ async function loadVector() {
         name: vectorName.value,
         threshold: threshold.value,
         op: vectorOp.value,
+        min_area: minAreaM2.value,
       }),
     })
     const gj = await r.json()

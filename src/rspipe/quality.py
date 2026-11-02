@@ -226,7 +226,8 @@ def rank_scenes(
     cand: list[tuple[SceneMeta, float, str | None]] = []
     for s in scenes:
         ov = aoi_overlap(s, bbox)
-        if ov <= min_overlap:
+        # 用容差比较：overlap=1.0 且门槛 1.0 时应保留（浮点误差）
+        if ov + 1e-9 < min_overlap:
             continue
         cand.append((s, ov, parse_tier(s.scene_id, s.properties)))
 

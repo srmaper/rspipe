@@ -610,6 +610,7 @@ def vectorize_index(
     *,
     op: str = "above",
     min_pixels: int = 4,
+    min_area_m2: float = 10.0,
     max_features: int = 3000,
     simplify_px: float = 1.0,
 ) -> dict:
@@ -642,10 +643,13 @@ def vectorize_index(
         return {"type": "FeatureCollection", "features": [], "count": 0}
 
     px_deg = abs(transform.a * transform.e)
-    min_area = px_deg * max(1, min_pixels)
     tol = abs(transform.a) * max(0.0, simplify_px)
     lat_mid = math.radians((transform.f + transform.e * a.shape[0] / 2) if transform.e else 0.0)
     km2_per_deg2 = 111.32 * 110.54 * math.cos(lat_mid)
+    # 面积门槛：既剔除碎像元，也按用户给的平方米数剔除
+    min_area = px_deg * max(1, min_pixels)
+    if min_area_m2 > 0 and km2_per_deg2 > 0:
+        min_area = max(min_area, (min_area_m2 / 1e6) / km2_per_deg2)
 
     polys = []
     for geom, val in features.shapes(

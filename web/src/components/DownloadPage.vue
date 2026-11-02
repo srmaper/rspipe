@@ -51,10 +51,18 @@
       <!-- 右栏 -->
       <div id="right">
         <div class="card" id="tour-results" style="flex:1; display:flex; flex-direction:column; min-height:0">
-          <h3>检索结果</h3>
+          <h3>
+            检索结果
+            <select v-model="sortBy" class="sortsel" title="排序方式">
+              <option value="default">默认排序</option>
+              <option value="date">日期（新→旧）</option>
+              <option value="cloud">云量（少→多）</option>
+              <option value="overlap">覆盖率（高→低）</option>
+            </select>
+          </h3>
           <div id="scenes" class="scenelist">
-            <div v-if="!groups.length" class="hint">先设置 AOI 并检索。结果按 Tier1 > AOI实测云量 > 覆盖度 排序。</div>
-            <div v-for="g in groups" :key="g.provider + g.collection" class="group">
+            <div v-if="!groups.length" class="hint">先设置 AOI 并检索。可右上角切换排序方式。</div>
+            <div v-for="g in sortedGroups" :key="g.provider + g.collection" class="group">
               <div class="group-title">{{ labelOf(g) }} <span class="muted">({{ g.kept }}/{{ g.total }})</span></div>
               <div v-if="!g.kept && g.hint" class="hint" style="margin:4px 0 8px">{{ g.hint }}</div>
               <SceneCard
@@ -111,6 +119,7 @@ import TasksCard from './TasksCard.vue'
 const mapRef = ref(null)
 const groups = ref([])
 const searching = ref(false)
+const sortBy = ref('default')
 const rawOkIds = ref(new Set())   // raw 下载完成的景 id —— 之后才允许"生成预览"
 const logs = ref([])
 function toggleAoiLayer() {
@@ -152,6 +161,7 @@ const sCfg = ref({
   end: new Date().toISOString().slice(0, 10),
   cloud: 10,
   cloud_mode: 'scene',
+  minOverlapPct: 100,
   providers: [['earth-search', 'sentinel-2-l2a']],
 })
 const msgBox = ref(null)
@@ -660,6 +670,23 @@ function clearPreview() {
   mapRef.value?.clearPreview()
   mapRef.value?.clearSceneAoi()
 }
+// 结果排序：默认沿用后端质量排序（Tier1 > AOI 云量 > 覆盖度），也可按日期/云量/覆盖率
+const sortedGroups = computed(() => {
+  if (sortBy.value === 'default') return groups.value
+  const mode = sortBy.value
+  return groups.value.map((g) => ({
+    ...g,
+    scenes: [...g.scenes].sort((a, b) => {
+      if (mode === 'date') return String(b.datetime || '').localeCompare(String(a.datetime || ''))
+      if (mode === 'cloud') {
+        const ca = a.aoi_cloud ?? a.cloud_cover ?? 1e9
+        const cb = b.aoi_cloud ?? b.cloud_cover ?? 1e9
+        return ca - cb
+      }
+      return (b.overlap ?? 0) - (a.overlap ?? 0)
+    }),
+  }))
+})
 const labelOf = g => (g.collection.includes('landsat') ? 'Landsat 8/9' : 'Sentinel-2') + ' · ' + g.provider
 
 // 底部坐标条：监听鼠标事件由 MapCanvas 转发
@@ -702,6 +729,10 @@ defineEmits(['home'])
   box-shadow: 0 4px 18px rgba(20,30,45,.14); backdrop-filter: blur(6px);
 }
 #tsearch input { border: 1px solid var(--line); border-radius: 7px; font: inherit; width: 240px; padding: 3px 10px; }
+.sortsel {
+  margin-left: auto; width: auto; min-height: 22px; padding: 1px 4px;
+  font-size: 11px; border-radius: 6px; font-weight: 400;
+}
 .channelbar {
   position: absolute; z-index: 31; top: 12px; left: 12px;
   display: flex; flex-direction: column; gap: 4px; width: 90px; box-sizing: border-box;
