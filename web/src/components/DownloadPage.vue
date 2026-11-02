@@ -37,11 +37,11 @@
         <button @click="addrSearch">搜索</button>
       </div>
         <div class="channelbar" v-if="previewLayer">
+          <button class="stretch stretch-chip" :class="{ on: stretchMode === 'none' }"
+                  :title="'真彩色显示方式：无拉伸（直出+gamma）/ 自动拉伸（1-99.5%）'"
+                  @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}</button>
           <button v-for="c in channelsList" :key="c.v" :class="{ primary: channels === c.v }" @click="setChannels(c.v)">
             {{ c.label }}
-          </button>
-          <button class="stretch" :class="{ on: stretchMode === 'none' }" @click="toggleStretch">
-            {{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}
           </button>
           <button :class="{ on: aoiVisible }" @click="toggleAoiLayer">AOI</button>
           <button @click="clearPreview">关闭</button>
@@ -710,6 +710,11 @@ defineEmits(['home'])
   box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .channelbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
+.channelbar .stretch-chip {
+  position: absolute; top: 3px; left: calc(100% + 6px); width: auto;
+  min-height: 22px; padding: 1px 9px; font-size: 10.5px; border-radius: 9px;
+  white-space: nowrap; box-shadow: 0 3px 12px rgba(20,30,45,.18);
+}
 .guide-btn { width: 100%; min-height: 34px; font-size: 13px; }
 .back { flex: none; }
 </style>

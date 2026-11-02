@@ -83,10 +83,10 @@
       <div id="center" data-tour="map">
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
+          <button class="stretch stretch-chip" :class="{ on: stretchMode === 'none' }"
+                  :title="'真彩色显示方式：无拉伸（直出+gamma）/ 自动拉伸（1-99.5%）'"
+                  @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}</button>
           <button :class="{ primary: viewMode === 'source' }" :disabled="!hasSource" @click="showSource">原始影像</button>
-          <button class="stretch" :class="{ on: stretchMode === 'none' }" :disabled="!hasSource" @click="toggleStretch">
-            {{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}
-          </button>
           <button :class="{ primary: viewMode === 'result' }" @click="showResult">结果影像</button>
           <button v-if="mode === 'change'" :disabled="comparing" @click="openSwipe">
             {{ comparing ? "准备中…" : "双屏比对" }}
@@ -715,6 +715,11 @@ onMounted(async () => {
   border-radius: 10px; padding: 5px 7px; box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .layerbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
+.layerbar .stretch-chip {
+  position: absolute; top: 3px; left: calc(100% + 6px); width: auto;
+  min-height: 22px; padding: 1px 9px; font-size: 10.5px; border-radius: 9px;
+  white-space: nowrap; box-shadow: 0 3px 12px rgba(20,30,45,.18);
+}
 #center > .badge {
   position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
   z-index: 20; max-width: 70%;
