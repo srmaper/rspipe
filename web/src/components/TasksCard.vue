@@ -1,6 +1,9 @@
 <template>
   <div class="card taskcard">
-    <h3>下载任务</h3>
+    <h3>下载任务
+      <button v-if="finishedCount" class="clear-btn" @click="$emit('clear')"
+              title="清空已完成/失败的记录（不删已下载文件）">清空</button>
+    </h3>
     <div class="tasks">
       <div v-if="!jobs.length" class="hint">暂无任务。点击景卡片的「下载影像」发起。</div>
       <div v-for="j in jobs.slice(0, 30)" :key="j.id" class="tlr">
@@ -26,8 +29,12 @@
 </template>
 
 <script setup>
-defineProps({ jobs: Array })
-defineEmits(['preview', 'meta', 'download', 'delete', 'pause', 'resume'])
+import { computed } from 'vue'
+const props = defineProps({ jobs: Array })
+defineEmits(['preview', 'meta', 'download', 'delete', 'pause', 'resume', 'clear'])
+const finishedCount = computed(
+  () => (props.jobs || []).filter((j) => j.status === 'ok' || j.status === 'error').length,
+)
 const statusText = s =>
   ({ queued: '排队', running: '运行', paused: '已暂停', ok: '完成', error: '失败' }[s] || s)
 const dotColor = s =>
@@ -57,9 +64,14 @@ function lineText(j) {
   }
   return [j.message || '', time].filter(Boolean).join(' · ')
 }
+
 </script>
 
 <style scoped>
+.clear-btn {
+  margin-left: auto; font-size: 11px; font-weight: 500;
+  padding: 1px 8px; min-height: 20px; color: var(--muted);
+}
 .taskcard { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .tasks { flex: 1; min-height: 0; overflow: auto; }
 .tlr {

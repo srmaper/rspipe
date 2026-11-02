@@ -40,7 +40,10 @@
           <button v-for="c in channelsList" :key="c.v" :class="{ primary: channels === c.v }" @click="setChannels(c.v)">
             {{ c.label }}
           </button>
-          <button :class="{ primary: aoiVisible }" @click="toggleAoiLayer">AOI</button>
+          <button class="stretch" :class="{ on: stretchMode === 'none' }" @click="toggleStretch">
+            {{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}
+          </button>
+          <button :class="{ on: aoiVisible }" @click="toggleAoiLayer">AOI</button>
           <button @click="clearPreview">关闭</button>
         </div>
       </div>
@@ -73,14 +76,14 @@
         </div>
         <div id="tour-tasks">
           <TasksCard :jobs="jobs" @preview="onTaskPreview" @meta="onTaskMeta" @download="onTaskDownload"
-                     @delete="onTaskDelete" @pause="onTaskPause" @resume="onTaskResume" />
+                     @delete="onTaskDelete" @pause="onTaskPause" @resume="onTaskResume" @clear="onTaskClear" />
         </div>
       </div>
     </div>
 
     <SceneDrawer v-if="detail" :detail="detail" @close="detail = null" />
     <MessageBox ref="msgBox" />
-    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" @close="tourOpen = false" />
+    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" :autoplay="tourAutoplay" @close="closeTour" />
     <BandPicker
       v-if="bandPick"
       :sid="bandPick.sid"
@@ -132,12 +135,13 @@ const aoiTool = ref(null)       // 'rect' | 'poly' | 'search' | null —— 三�
 const activeScene = ref(null)
 const previewLayer = ref(null)
 const channels = ref('rgb')
+// none=反射率直出 + gamma 0.6（贴近 ArcGIS 观感）；auto=按景 1-99.5% 拉伸
+const stretchMode = ref('none')
 const aoiVisible = ref(true)
 const aoiUploading = ref(false)
 const channelsList = [
   { v: 'rgb', label: '真彩色' },
   { v: 'false', label: '假彩 NIR' },
-  { v: 'ndvi', label: 'NDVI' },
 ]
 const jobs = ref([])
 const bandPick = ref(null)
@@ -152,6 +156,7 @@ const sCfg = ref({
 })
 const msgBox = ref(null)
 const tourOpen = ref(false)
+const tourAutoplay = ref(false)   // 首次安装自动播放
 
 const TOUR_STEPS = [
   {
@@ -179,12 +184,12 @@ const TOUR_STEPS = [
   {
     selector: '#tour-tasks',
     title: '任务与预览',
-    text: '任务卡显示进度；完成后可「预览」叠加影像（真彩/假彩/NDVI）、「元数据」查看字段、「下载」导出 zip、「删除」清理本地产物。',
+    text: '任务卡显示进度；完成后可「预览」叠加影像（真彩/假彩 NIR）、「元数据」查看字段、「下载」导出 zip、「删除」清理本地产物。',
   },
   {
     selector: '#center',
     title: '地图操作',
-    text: '左上切换真彩/假彩/NDVI 与范围显示，右下切换卫星影像/矢量底图，底部显示鼠标经纬度，左下是比例尺。',
+    text: '左上切换真彩/假彩 NIR、拉伸方式与范围显示，右下切换卫星影像/矢量底图，底部显示鼠标经纬度，左下是比例尺。',
   },
   {
     selector: '#tour-go-analysis',
@@ -195,7 +200,13 @@ const TOUR_STEPS = [
 ]
 
 function startTour() {
+  tourAutoplay.value = false
   tourOpen.value = true
+}
+function closeTour() {
+  tourOpen.value = false
+  tourAutoplay.value = false
+  try { localStorage.setItem('rspipe_tour_seen', '1') } catch (e) {}
 }
 const aoiArea = ref(0)          // AOI 面积 km²
 const AREA_LIMIT = 5000         // 单次下载面积上限 km²
@@ -241,6 +252,15 @@ function clearFootprintOnClick() {
 }
 onMounted(async () => {
   document.addEventListener('click', clearFootprintOnClick, true)
+  // 首次安装/部署：自动播放操作指引（每步 3 秒），看过一次后不再自动弹
+  let seen = ''
+  try { seen = localStorage.getItem('rspipe_tour_seen') || '' } catch (e) {}
+  if (!seen) {
+    setTimeout(() => {
+      tourAutoplay.value = true
+      tourOpen.value = true
+    }, 900)
+  }
   const r = await fetch('/api/aoi')
   aois.value = await r.json()
   // 进度轮询（1s），替代 WS 的简单实现
@@ -394,6 +414,16 @@ async function onTaskDownload(j) {
     showToast('打包失败: ' + (e.message || e))
   }
 }
+async function onTaskClear() {
+  try {
+    const r = await fetch('/api/jobs/clear', { method: 'POST' })
+    const d = await r.json()
+    jobs.value = jobs.value.filter((x) => x.status !== 'ok' && x.status !== 'error')
+    showToast(d.removed ? `已清空 ${d.removed} 条记录` : '没有可清理的记录')
+  } catch (e) {
+    showToast('清空失败: ' + (e.message || e))
+  }
+}
 async function onTaskDelete(j) {
   const yes = await msgBox.value?.confirm({
     title: '删除确认',
@@ -517,7 +547,7 @@ function startPreview(s) {
   const sceneBounds = s.bbox || geomBbox(s.footprint) || null
   // 数据实际范围（瓦片只覆盖这块）——source.bounds 必须用它，否则 MapLibre 会把瓦片拉伸错位
   const dataBounds = s.raw_bounds || s.cog_bounds || bbox.value || sceneBounds
-  previewLayer.value = { ...s, provider, collection, bounds: dataBounds, ready: true }
+  previewLayer.value = { ...s, provider, collection, bounds: dataBounds, ready: true, stretch: stretchMode.value }
   channels.value = 'rgb'
   // AOI 图层显示这张影像自己的 AOI，避免与当前下载范围混淆
   loadSceneAoi(provider, s.scene_id)
@@ -616,7 +646,14 @@ async function startJob(s, type, onOk, bands, mode = 'aoi') {
 function setChannels(v) {
   channels.value = v
   const p = previewLayer.value
-  mapRef.value?.setPreviewTiles(p.scene_id, v, p.provider, p.collection, p.bounds)
+  mapRef.value?.setPreviewTiles(p.scene_id, v, p.provider, p.collection, p.bounds, stretchMode.value)
+}
+function toggleStretch() {
+  stretchMode.value = stretchMode.value === 'none' ? 'auto' : 'none'
+  const p = previewLayer.value
+  if (!p) return
+  p.stretch = stretchMode.value
+  mapRef.value?.setPreviewTiles(p.scene_id, channels.value, p.provider, p.collection, p.bounds, stretchMode.value)
 }
 function clearPreview() {
   previewLayer.value = null

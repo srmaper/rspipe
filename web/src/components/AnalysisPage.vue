@@ -83,15 +83,18 @@
       <div id="center" data-tour="map">
         <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
         <div class="layerbar" v-if="preview">
-          <button :class="{ primary: sourceOn }" :disabled="!hasSource" @click="toggleSource">原始影像</button>
-          <button :class="{ primary: resultVisible }" @click="toggleResult">结果影像</button>
+          <button :class="{ primary: viewMode === 'source' }" :disabled="!hasSource" @click="showSource">原始影像</button>
+          <button class="stretch" :class="{ on: stretchMode === 'none' }" :disabled="!hasSource" @click="toggleStretch">
+            {{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}
+          </button>
+          <button :class="{ primary: viewMode === 'result' }" @click="showResult">结果影像</button>
           <button v-if="mode === 'change'" :disabled="comparing" @click="openSwipe">
             {{ comparing ? "准备中…" : "双屏比对" }}
           </button>
-          <button :class="{ primary: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
+          <button :class="{ on: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
             {{ vectorBusy ? "生成中…" : "阈值矢量" }}
           </button>
-          <button :class="{ primary: aoiOn }" :disabled="!hasAoi" @click="toggleAoi">AOI</button>
+          <button :class="{ on: aoiOn }" :disabled="!hasAoi" @click="toggleAoi">AOI</button>
           <button @click="closeLayers">关闭</button>
         </div>
         <div class="badge" v-if="preview">{{ preview.scene_id }}</div>
@@ -140,7 +143,7 @@
 
     <MessageBox ref="msgBox" />
     <GuideModal v-if="guideOpen" @close="guideOpen = false" />
-    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" @close="tourOpen = false" />
+    <TourGuide v-if="tourOpen" :steps="TOUR_STEPS" :autoplay="tourAutoplay" @close="closeTour" />
     <SwipeCompare
       v-if="swipe"
       :tile-a="swipe.tileA"
@@ -186,6 +189,7 @@ const GROUP_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与�
 
 const guideOpen = ref(false)
 const tourOpen = ref(false)
+const tourAutoplay = ref(false)   // 首次进入自动播放
 
 const TOUR_STEPS = [
   {
@@ -215,7 +219,7 @@ const TOUR_STEPS = [
     padding: 6,
   },
 ]
-const resultVisible = ref(true)
+const viewMode = ref('result') // 原始影像 / 结果影像 二选一
 const indexGroups = computed(() =>
   GROUP_ORDER.map((g) => ({ label: g, items: availableIndices.value.filter((i) => i.group === g) }))
     .filter((g) => g.items.length),
@@ -235,7 +239,9 @@ const swipe = ref(null)
 const history = ref([])
 const msgBox = ref(null)
 function showToast(m) { msgBox.value?.toast(m) }
-const sourceOn = ref(true)      // 原始影像（分析目录里的 source_4326.tif）
+// 原始影像（分析目录里的 source_4326.tif）由 viewMode 控制显隐
+const stretchMode = ref('none') // 真彩色：none=直出+gamma0.6 / auto=1-99.5% 拉伸
+const sourceBounds = ref(null)
 const aoiOn = ref(true)         // 下载 AOI 边界
 const hasSource = ref(false)
 const hasAoi = ref(false)
@@ -366,7 +372,7 @@ async function run() {
         scene_id: sceneA.value, ready: true,
         bounds: j.stats.bounds,
       }
-      resultVisible.value = true
+      viewMode.value = 'result'
       hasSource.value = !!j.has_source
       applySource(sceneA.value, j.stats.bounds)
       applyAoi(sceneA.value)
@@ -392,7 +398,7 @@ async function run() {
       tileTemplate.value = j.tiles
       const bounds = statsBounds()
       preview.value = { scene_id: j.key, ready: true, bounds }
-      resultVisible.value = true
+      viewMode.value = 'result'
       hasSource.value = !!j.has_source
       applySource(j.key, bounds)
       applyAoi(j.key)
@@ -448,12 +454,19 @@ async function openSwipe() {
   }
 }
 
-function toggleResult() {
-  resultVisible.value = !resultVisible.value
+function showSource() {
+  const p = preview.value
+  if (!p || !hasSource.value) return
+  viewMode.value = 'source'
+  mapRef.value?.clearPreview()          // 结果影像让位
+  mapRef.value?.setSourceVisible(true)
+}
+function showResult() {
   const p = preview.value
   if (!p) return
-  if (resultVisible.value) mapRef.value?.setPreviewTiles(p.scene_id, 'rgb', '', '', p.bounds)
-  else mapRef.value?.clearPreview()
+  viewMode.value = 'result'
+  mapRef.value?.setSourceVisible(false) // 原始影像让位
+  mapRef.value?.setPreviewTiles(p.scene_id, 'rgb', '', '', p.bounds)
 }
 
 async function loadVector() {
@@ -525,7 +538,7 @@ async function loadHistory(h) {
   if (thr !== null && thr !== undefined) threshold.value = thr
   else applyDefaultThreshold()
 
-  resultVisible.value = true
+  viewMode.value = 'result'
   stats.value = { ...(h.stats || {}) }
   resultAt.value = h.created || 0
   tileTemplate.value = `/api/analysis/tiles/${h.key}/${name}/{z}/{x}/{y}.png`
@@ -581,8 +594,10 @@ function downloadResult(keyArg) {
 }
 function applySource(key, bounds) {
   if (!key) return
-  const url = `/api/analysis/source/${encodeURIComponent(key)}/{z}/{x}/{y}.png`
-  if (sourceOn.value) mapRef.value?.setSourceTiles(url, bounds)
+  sourceBounds.value = bounds || null
+  const url = `/api/analysis/source/${encodeURIComponent(key)}/{z}/{x}/{y}.png?stretch=${stretchMode.value}`
+  mapRef.value?.setSourceTiles(url, bounds)
+  mapRef.value?.setSourceVisible(viewMode.value === 'source')
 }
 async function applyAoi(key) {
   if (!key) return
@@ -597,10 +612,15 @@ async function applyAoi(key) {
     hasAoi.value = false
   }
 }
-function toggleSource() {
-  sourceOn.value = !sourceOn.value
-  mapRef.value?.setSourceVisible(sourceOn.value)
+function toggleStretch() {
+  stretchMode.value = stretchMode.value === 'none' ? 'auto' : 'none'
+  const key = preview.value?.scene_id
+  if (!key) return
+  const url = `/api/analysis/source/${encodeURIComponent(key)}/{z}/{x}/{y}.png?stretch=${stretchMode.value}`
+  mapRef.value?.setSourceTiles(url, sourceBounds.value)
+  mapRef.value?.setSourceVisible(viewMode.value === 'source')
 }
+
 function toggleAoi() {
   aoiOn.value = !aoiOn.value
   mapRef.value?.setAoiVisible(aoiOn.value)
@@ -634,7 +654,22 @@ function applyDefaultThreshold() {
 }
 watch(index, applyDefaultThreshold)
 watch(mode, applyDefaultThreshold)
+function closeTour() {
+  tourOpen.value = false
+  tourAutoplay.value = false
+  try { localStorage.setItem('rspipe_tour_analysis_seen', '1') } catch (e) {}
+}
+
 onMounted(async () => {
+  // 首次进入分析页：自动播放指引（每步 3 秒）
+  let seen = ''
+  try { seen = localStorage.getItem('rspipe_tour_analysis_seen') || '' } catch (e) {}
+  if (!seen) {
+    setTimeout(() => {
+      tourAutoplay.value = true
+      tourOpen.value = true
+    }, 900)
+  }
   await loadMeta()
   applyDefaultThreshold()
   loadScenes()

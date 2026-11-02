@@ -336,13 +336,14 @@ function setSourceVisible(visible) {
     }
   } catch (e) {}
 }
-function setPreviewTiles(sceneId, channels, provider, collection, bounds) {
+function setPreviewTiles(sceneId, channels, provider, collection, bounds, stretch = '') {
   if (!map) return
   clearPreview()
   previewId = sceneId
   const q = new URLSearchParams({ channels })
   if (provider) q.set('provider', provider)
   if (collection) q.set('collection', collection)
+  if (stretch) q.set('stretch', stretch)
   const url = props.tileTemplate || `/api/tiles/${sceneId}/{z}/{x}/{y}.png?${q.toString()}`
   const src = {
     type: 'raster',
@@ -373,7 +374,7 @@ watch(
   () => props.previewScene,
   s => {
     if (!s) { clearPreview(); return }
-    if (s.ready) setPreviewTiles(s.scene_id, 'rgb', s.provider, s.collection, s.bounds)
+    if (s.ready) setPreviewTiles(s.scene_id, 'rgb', s.provider, s.collection, s.bounds, s.stretch || '')
   },
 )
 

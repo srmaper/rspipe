@@ -2,13 +2,15 @@
   <teleport to="body">
     <div class="tour">
       <div class="spot" :style="spotStyle"></div>
-      <div class="tip" :style="tipStyle">
+      <div class="tip" :style="tipStyle" @mouseenter="pauseAuto" @mouseleave="resumeAuto">
         <div class="hd">
           <span class="step">第 {{ index + 1 }} / {{ steps.length }} 步</span>
           <span class="title">{{ cur.title }}</span>
         </div>
         <div class="bd">{{ cur.text }}</div>
+        <div v-if="autoplay" class="prog"><i :style="{ width: autoPct * 100 + '%' }"></i></div>
         <div class="ft">
+          <span v-if="autoplay" class="auto-hint">{{ paused ? '已暂停（鼠标移开继续）' : Math.round(dwell / 1000) + ' 秒/步 · 自动播放' }}</span>
           <button v-if="index > 0" @click="prev">上一步</button>
           <button class="primary" @click="next">{{ index === steps.length - 1 ? '完成' : '下一步' }}</button>
           <button class="skip" @click="$emit('close')">跳过</button>
@@ -23,6 +25,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   steps: { type: Array, required: true },   // [{selector, title, text, padding?}]
+  autoplay: { type: Boolean, default: false },
+  dwell: { type: Number, default: 3000 },   // 每步停留毫秒
 })
 const emit = defineEmits(['close'])
 
@@ -94,14 +98,55 @@ function prev() {
   if (index.value > 0) index.value -= 1
 }
 
-watch(index, measure)
+// ---- 自动播放 ----
+const autoPct = ref(0)
+const paused = ref(false)
+let autoTimer = null
+let rafId = 0
+let autoStart = 0
+
+function clearAuto() {
+  clearTimeout(autoTimer)
+  cancelAnimationFrame(rafId)
+  autoTimer = null
+  autoPct.value = 0
+}
+function scheduleAuto() {
+  clearAuto()
+  paused.value = false
+  if (!props.autoplay) return
+  autoStart = performance.now()
+  const tick = () => {
+    const p = Math.min(1, (performance.now() - autoStart) / props.dwell)
+    autoPct.value = p
+    if (p < 1) rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+  autoTimer = setTimeout(() => next(), props.dwell)
+}
+function pauseAuto() {
+  if (!props.autoplay) return
+  paused.value = true
+  clearAuto()
+}
+function resumeAuto() {
+  if (!props.autoplay || !paused.value) return
+  scheduleAuto()
+}
+
+watch(index, () => {
+  measure()
+  scheduleAuto()
+})
 onMounted(() => {
   measure()
+  scheduleAuto()
   window.addEventListener('resize', measure)
   window.addEventListener('scroll', measure, true)
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
+  clearAuto()
   clearTimeout(missingTimer)
   window.removeEventListener('resize', measure)
   window.removeEventListener('scroll', measure, true)
@@ -139,4 +184,7 @@ function onKey(e) {
 .bd { font-size: 12.5px; color: var(--ink); line-height: 1.85; }
 .ft { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
 .skip { border: none; background: transparent; color: var(--muted); }
+.auto-hint { margin-right: auto; font-size: 11px; color: var(--muted); align-self: center; }
+.prog { height: 3px; background: #e6eef7; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.prog i { display: block; height: 100%; background: #38bdf8; }
 </style>

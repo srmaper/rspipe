@@ -18,6 +18,10 @@ button {
 button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: #f5f9ff; }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
 button.primary:hover:not(:disabled) { background: var(--accent2); color: #fff; }
+button.on { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; font-weight: 600; }
+button.on:hover:not(:disabled) { background: #c7ddfd; color: #1d4ed8; border-color: var(--accent); }
+button.on.stretch { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+button.on.stretch:hover:not(:disabled) { background: #fde9a8; color: #92400e; border-color: #f59e0b; }
 button:disabled { color: #aab2bd; background: #f7f8fa; border-color: var(--line); cursor: not-allowed; }
 select, input, input[type="date"] {
   font: inherit; border: 1px solid var(--line); border-radius: 7px;
