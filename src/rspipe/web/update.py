@@ -69,6 +69,11 @@ def check_update(
             rel = json.loads(resp.read().decode("utf-8"))
         assets = [a for a in rel.get("assets") or [] if str(a.get("name", "")).endswith(".exe")]
         asset = assets[0] if assets else {}
+        asset_id = asset.get("id") or 0
+        # github.com 的下载地址在部分网络下会被拦，API 资源地址通常可用
+        asset_api = (
+            f"https://api.github.com/repos/{REPO}/releases/assets/{asset_id}" if asset_id else ""
+        )
         info.update(
             {
                 "ok": True,
@@ -78,6 +83,8 @@ def check_update(
                 "page": rel.get("html_url") or "",
                 "published": rel.get("published_at") or "",
                 "asset": asset.get("browser_download_url") or "",
+                "asset_api": asset_api,
+                "asset_id": asset_id,
                 "asset_name": asset.get("name") or "",
                 "asset_size": asset.get("size") or 0,
             }

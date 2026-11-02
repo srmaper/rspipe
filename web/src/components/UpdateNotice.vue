@@ -9,7 +9,10 @@
     <template v-if="info.has_update">
       <div v-if="st.status === 'downloading'" class="dl">
         <div class="bar"><i :style="{ width: pct + '%' }"></i></div>
-        <div class="dl-t">正在后台下载更新 {{ pct }}%<span v-if="sizeText"> · {{ sizeText }}</span></div>
+        <div class="dl-t">
+          正在后台下载更新 {{ pct }}%<span v-if="sizeText"> · {{ sizeText }}</span>
+          <span v-if="st.retries"> · 网络不稳，重试中（{{ st.retries }}）</span>
+        </div>
       </div>
       <div v-else-if="st.status === 'ready'" class="dl-t ok">
         {{ countdown > 0 ? countdown + ' 秒后自动重启安装…' : '安装包已下载完成' }}
@@ -33,7 +36,8 @@
         </template>
         <template v-else>
           <button class="primary" @click="startDownload">重新下载</button>
-          <button @click="later">稍后</button>
+          <button class="ghost" @click="openPage">手动下载</button>
+          <button class="ghost" @click="later">稍后</button>
         </template>
       </div>
       <div class="tip">{{ tipText }}</div>
@@ -105,6 +109,10 @@ async function check(force = false) {
 }
 
 async function startDownload() {
+  if (st.value.status === 'downloading' || st.value.status === 'ready') {
+    visible.value = true
+    return
+  }
   st.value = { status: 'downloading', progress: 0, error: '' }
   visible.value = true
   try {

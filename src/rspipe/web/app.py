@@ -788,14 +788,14 @@ def create_app() -> FastAPI:
         from rspipe.web import updater
         from rspipe.web.update import check_update
 
-        info = check_update(Path(cfg.data_root), __version__, force=True)
+        info = check_update(Path(cfg.data_root), __version__)
         if not info.get("has_update"):
             return {"ok": False, "error": "已是最新版本"}
         if not info.get("asset"):
             return {"ok": False, "error": "未找到安装包下载地址"}
         st = updater.start_download(
             Path(cfg.data_root),
-            info["asset"],
+            [info.get("asset_api") or "", info.get("asset") or ""],
             info.get("asset_name") or "",
             info.get("latest") or "",
         )
