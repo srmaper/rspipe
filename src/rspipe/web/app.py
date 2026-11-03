@@ -302,6 +302,9 @@ def create_app() -> FastAPI:
         _env_file=str(ROOT / ".env") if (ROOT / ".env").exists() else None
     )
     center = JobCenter(cfg, settings)
+    from rspipe.web import updater as _updater
+
+    _updater.set_data_root(Path(cfg.data_root))
     pipe = center._pipe
 
     # ---------- 检索 ----------
@@ -827,6 +830,14 @@ def create_app() -> FastAPI:
 
         info = check_update(Path(cfg.data_root), __version__, force=force)
         info["can_auto"] = updater.can_auto_install()
+        # 本地是否已经下好同版本安装包（重启后不必重新下载）
+        info["downloaded"] = bool(
+            updater.existing_package(
+                info.get("latest") or "",
+                info.get("asset_name") or "",
+                int(info.get("asset_size") or 0),
+            )
+        )
         return info
 
     @app.post("/api/update/download")
@@ -846,6 +857,7 @@ def create_app() -> FastAPI:
             [info.get("asset_api") or "", info.get("asset") or ""],
             info.get("asset_name") or "",
             info.get("latest") or "",
+            int(info.get("asset_size") or 0),
         )
         return {"ok": True, **st}
 
@@ -853,7 +865,7 @@ def create_app() -> FastAPI:
     def api_update_status() -> dict:
         from rspipe.web import updater
 
-        return updater.state()
+        return {**updater.state(), "can_auto": updater.can_auto_install()}
 
     @app.post("/api/update/install")
     def api_update_install() -> dict:
