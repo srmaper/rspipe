@@ -186,7 +186,7 @@ def _empty_hint(client, coll: str, bbox, sd, ed, cloud: float | None) -> str | N
     只在 0 结果时调用，多一次 STAC 查询（会进缓存），正常检索不受影响。
     """
     try:
-        loose = client.search(bbox=bbox, start=sd, end=ed, max_items=50)
+        loose = client.search(bbox=bbox, start=sd, end=ed, max_items=100)
         loose = [s for s in loose if s.collection == coll]
     except Exception:
         return None
@@ -336,7 +336,7 @@ def create_app() -> FastAPI:
                     start=sd,
                     end=ed,
                     max_cloud_cover=req.cloud,
-                    max_items=50,
+                    max_items=100,
                 )
             except Exception as exc:
                 log.warning("search %s/%s failed: %s", prov, coll, exc)
@@ -367,7 +367,7 @@ def create_app() -> FastAPI:
                 "total": len(scenes),
                 "kept": len(ranked),
                 "hint": _empty_hint(client, coll, bbox, sd, ed, req.cloud) if not scenes else None,
-                "table": format_ranked(ranked[:20]),
+                "table": format_ranked(ranked[:100]),
                 "scenes": [
                     SceneOut(
                         scene_id=r.scene.scene_id,
@@ -385,7 +385,7 @@ def create_app() -> FastAPI:
                         cog_bounds=_cog_bounds(cfg.data_root, r.scene.scene_id),
                         has_cog=_has_cog(cfg.data_root, r.scene.scene_id),
                     ).model_dump()
-                    for r in ranked[:20]
+                    for r in ranked[:100]
                 ],
             }
             out["groups"].append(group)

@@ -172,7 +172,7 @@ const TOUR_STEPS = [
   {
     selector: '#tour-aoi',
     title: '设置下载范围',
-    text: '三种方式定范围：①「框选矩形」在地图上拖；②「位置搜索」输入地名；③「上传矢量」导入 shp（zip）/geojson/kml（需 WGS84 坐标系）。面积上限 5000 km²（约 70×70 km），超出会提示并阻止提交。',
+    text: '三种方式定范围：①「框选矩形」在地图上拖；②「位置搜索」输入地名；③「上传矢量」导入 shp（zip）/geojson/kml（需 WGS84 坐标系）。面积上限 10000 km²（约 100×100 km），超出会提示并阻止提交。',
   },
   {
     selector: '#tour-search',
@@ -219,7 +219,7 @@ function closeTour() {
   try { localStorage.setItem('rspipe_tour_seen', '1') } catch (e) {}
 }
 const aoiArea = ref(0)          // AOI 面积 km²
-const AREA_LIMIT = 5000         // 单次下载面积上限 km²
+const AREA_LIMIT = 10000        // 单次下载面积上限 km²
 let toastTimer = null
 function showToast(m, kind = 'info') {
   msgBox.value?.toast(m, kind)

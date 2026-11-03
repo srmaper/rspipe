@@ -19,4 +19,4 @@ __all__ = [
     "load_pipeline_config",
 ]
 
-__version__ = "1.1.5"
+__version__ = "1.1.6"

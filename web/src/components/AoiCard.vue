@@ -39,7 +39,7 @@ const props = defineProps({
   aoiName: String,
   active: String, // 'rect' | 'poly' | 'search' | null —— 三按钮互斥单选
   area: { type: Number, default: 0 },
-  limit: { type: Number, default: 5000 },
+  limit: { type: Number, default: 10000 },
   uploading: { type: Boolean, default: false },
 })
 const emit = defineEmits(['set', 'clear', 'upload'])

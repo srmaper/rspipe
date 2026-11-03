@@ -15,7 +15,7 @@
       <button
         class="primary"
         :disabled="busy"
-        :title="downloadOk ? '已下载过本景；换 AOI 再点会扩展裁剪范围（原区域保留）' : '按当前 AOI 裁剪下载（≤5000 km²）'"
+        :title="downloadOk ? '已下载过本景；换 AOI 再点会扩展裁剪范围（原区域保留）' : '按当前 AOI 裁剪下载（≤10000 km²）'"
         @click="$emit('download', scene, 'aoi')"
       >
         {{ downloadOk ? '重新裁剪' : busy ? btnText : 'AOI 下载' }}
