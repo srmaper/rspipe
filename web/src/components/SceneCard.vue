@@ -3,7 +3,7 @@
     <div class="row" style="margin-top:0">
       <div class="grow" style="cursor:pointer; min-width:0" @click="$emit('select', scene)">
         <div style="font-weight:600;font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ scene.scene_id }}</div>
-        <div class="hint" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ fmtTime }} · {{ scene.provider }}</div>
+        <div class="hint" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ fmtTime }}<span v-if="platform"> · {{ platform }}</span> · {{ scene.provider }}</div>
       </div>
       <div style="flex:none">
         <span v-if="scene.tier" class="badge t1">{{ scene.tier }}</span>
@@ -54,6 +54,18 @@ const canResumeFull = computed(
   () => props.fullJob && ['paused', 'error'].includes(props.fullJob.status),
 )
 const fmtTime = computed(() => (props.scene.datetime || '').slice(0, 10))
+// 从 scene_id 前缀识别平台，便于区分同一集合里的 L5/L7/L8/L9
+const platform = computed(() => {
+  const id = String(props.scene.scene_id || '')
+  const map = {
+    LT04: 'L4 TM',
+    LT05: 'L5 TM',
+    LE07: 'L7 ETM+',
+    LC08: 'L8 OLI',
+    LC09: 'L9 OLI',
+  }
+  return map[id.slice(0, 4)] || ''
+})
 const cloudPct = computed(() => {
   const s = props.scene
   if (s.aoi_cloud != null) return Math.round(s.aoi_cloud * 1000) / 10
@@ -87,4 +99,5 @@ const btnText = computed(() => {
 <style scoped>
 .scene { margin-bottom: 9px; }
 .scene.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.badge.plat { background: #eef2ff; color: #4338ca; }
 </style>

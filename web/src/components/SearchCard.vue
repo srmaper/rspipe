@@ -25,7 +25,8 @@
     </select>
     <label>传感器</label>
     <label class="chk"><input type="radio" value="earth-search|sentinel-2-l2a" v-model="pick" /> Sentinel-2</label>
-    <label class="chk"><input type="radio" value="planetary-computer|landsat-c2-l2" v-model="pick" /> Landsat 8/9</label>
+    <label class="chk"><input type="radio" value="planetary-computer|landsat-c2-l2" v-model="pick" /> Landsat 5/7/8/9（含历史存档）</label>
+    <div class="hint years">L5：1984–2011 · L7：1999–今（2003 后有条带）· L8：2013– · L9：2021–</div>
     <div class="row">
       <button class="primary" :disabled="!bboxReady || loading" @click="go">
         {{ loading ? '检索中…' : '🔍 检索' }}
@@ -72,4 +73,5 @@ function go() {
 .dr .sep { flex: none; color: var(--muted); }
 .chk { display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 12px; margin: 3px 0; }
 .chk input { width: auto; }
+.years { margin: 2px 0 6px; line-height: 1.5; }
 </style>

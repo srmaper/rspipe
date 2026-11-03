@@ -687,7 +687,8 @@ const sortedGroups = computed(() => {
     }),
   }))
 })
-const labelOf = g => (g.collection.includes('landsat') ? 'Landsat 8/9' : 'Sentinel-2') + ' · ' + g.provider
+const labelOf = g =>
+  (g.collection.includes('landsat') ? 'Landsat 5/7/8/9' : 'Sentinel-2') + ' · ' + g.provider
 
 // 底部坐标条：监听鼠标事件由 MapCanvas 转发
 window.addEventListener('mousemove', e => {})  // 实际由 MapCanvas 回调
