@@ -104,13 +104,17 @@ def _window_for_tile(src: rasterio.io.DatasetReader, z: int, x: int, y: int):
 
 
 def _tone_rgb(rgb: np.ndarray, mode: str = "auto") -> np.ndarray:
-    """真彩色调：统一做 gamma（ArcGIS 同款思路），避免逐通道拉伸造成偏色。
+    """真彩色调：按景自适应 gamma（ArcGIS 自动显示设置的思路）。
 
-    auto：拉伸后 gamma 1.8，提亮中间调；
-    none：固定反射率区间 + gamma 1.6，观感接近 ArcGIS「无拉伸 + Gamma」。
+    取拉伸后影像的中位数为代表值，令它落到 50% 灰附近：
+        gamma = ln(median) / ln(0.5)
+    偏暗的景 gamma 更大（提亮更多），偏亮的景更小；限制在 1.2–2.6。
     """
     x = np.clip(rgb, 0, 255) / 255.0
-    g = 1.6 if mode == "none" else 1.8
+    pos = x[x > 0]
+    med = float(np.median(pos)) if pos.size else 0.5
+    g = math.log(med) / math.log(0.5) if 0.0 < med < 1.0 else 1.8
+    g = float(np.clip(g, 1.2, 2.6))
     return np.clip(np.power(x, 1.0 / g), 0.0, 1.0) * 255.0
 
 
