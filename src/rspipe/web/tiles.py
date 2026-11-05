@@ -111,10 +111,14 @@ def _tone_rgb(rgb: np.ndarray, mode: str = "auto") -> np.ndarray:
     偏暗的景 gamma 更大（提亮更多），偏亮的景更小；限制在 1.2–2.6。
     """
     x = np.clip(rgb, 0, 255) / 255.0
-    pos = x[x > 0]
-    med = float(np.median(pos)) if pos.size else 0.5
-    g = math.log(med) / math.log(0.5) if 0.0 < med < 1.0 else 1.8
-    g = float(np.clip(g, 1.2, 2.6))
+    if mode == "none":
+        # 固定映射：不做逐景自适应，保持"所见即固定"的观感
+        g = 1.6
+    else:
+        pos = x[x > 0]
+        med = float(np.median(pos)) if pos.size else 0.5
+        g = math.log(med) / math.log(0.5) if 0.0 < med < 1.0 else 1.8
+        g = float(np.clip(g, 1.2, 2.6))
     return np.clip(np.power(x, 1.0 / g), 0.0, 1.0) * 255.0
 
 
