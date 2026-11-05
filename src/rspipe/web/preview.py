@@ -91,7 +91,7 @@ _RANGE_CACHE: dict[tuple, dict[str, tuple[float, float]]] = {}
 
 
 def _ranges_for_raw(raw_dir: Path, keys, scale: str) -> dict[str, tuple[float, float]]:
-    """整景低分辨率采样 → 每波段稳定的 2%/98% 拉伸区间（按景缓存）。"""
+    """整景低分辨率采样 → RGB 共用的 1%/99% 拉伸区间（按景缓存）。"""
     import rasterio
 
     ck = (str(raw_dir), tuple(keys), scale)
@@ -99,6 +99,8 @@ def _ranges_for_raw(raw_dir: Path, keys, scale: str) -> dict[str, tuple[float, f
     if hit is not None:
         return hit
     out: dict[str, tuple[float, float]] = {}
+    los: list[float] = []
+    his: list[float] = []
     for k in keys:
         f = raw_dir / f"{raw_dir.name}.{k}.tif"
         if not f.exists():
@@ -109,10 +111,15 @@ def _ranges_for_raw(raw_dir: Path, keys, scale: str) -> dict[str, tuple[float, f
             arr = _dn_to_refl(arr, scale)
             v = arr[np.isfinite(arr)]
             if v.size:
-                lo, hi = np.percentile(v, [2, 98])
-                out[k] = (float(lo), float(hi))
+                lo, hi = np.percentile(v, [1, 99])
+                los.append(float(lo))
+                his.append(float(hi))
         except Exception:
             continue
+    if los:  # RGB 共用区间，避免逐通道拉伸偏色
+        lo, hi = min(los), max(his)
+        for k in keys:
+            out[k] = (lo, hi)
     if len(_RANGE_CACHE) > 64:
         _RANGE_CACHE.clear()
     _RANGE_CACHE[ck] = out
@@ -216,7 +223,7 @@ def render_local_tile(
     else:
         scale = "landsat" if "landsat" in collection else "s2"
         if stretch == "none":
-            ranges = dict.fromkeys(keys, (0.0, 1.0))
+            ranges = dict.fromkeys(keys, (0.0, 0.4))
         else:
             ranges = _ranges_for_raw(raw_dir, keys, scale)
         rgb, valid = _stretch_fixed(ranges, keys, stacks)

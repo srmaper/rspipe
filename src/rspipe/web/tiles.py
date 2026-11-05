@@ -104,27 +104,32 @@ def _window_for_tile(src: rasterio.io.DatasetReader, z: int, x: int, y: int):
 
 
 def _tone_rgb(rgb: np.ndarray, mode: str = "auto") -> np.ndarray:
-    """真彩色调：auto=高光肩部（压过曝，不动中间调）；none=无拉伸+gamma 0.6（贴近 ArcGIS 观感）。"""
+    """真彩色调：统一做 gamma（ArcGIS 同款思路），避免逐通道拉伸造成偏色。
+
+    auto：拉伸后 gamma 1.8，提亮中间调；
+    none：固定反射率区间 + gamma 1.6，观感接近 ArcGIS「无拉伸 + Gamma」。
+    """
     x = np.clip(rgb, 0, 255) / 255.0
-    if mode == "none":
-        return np.clip(np.power(x, 0.6), 0.0, 1.0) * 255.0
-    a = 0.8
-    x = np.where(x <= a, x, a + (1.0 - a) * np.tanh((x - a) / (1.0 - a)))
-    return np.clip(x, 0.0, 1.0) * 255.0
+    g = 1.6 if mode == "none" else 1.8
+    return np.clip(np.power(x, 1.0 / g), 0.0, 1.0) * 255.0
 
 
 def _stretch_rgb(stack: np.ndarray, valid: np.ndarray) -> np.ndarray:
-    """逐通道 2%~98% 线性拉伸到 0-255；无效区输出 255(白)。"""
+    """RGB 共用一段 1%~99% 区间拉伸到 0-255（共用区间可避免偏色）；无效区输出 255。"""
     out = np.full(stack.shape, 255, dtype="float32")
+    vals = stack[:, valid]
+    if vals.size < 48:
+        return out
+    los, his = [], []
     for i in range(stack.shape[0]):
-        v = stack[i]
-        vals = v[valid]
-        if vals.size < 16:
-            continue
-        lo, hi = np.percentile(vals, [2, 98])
-        if hi <= lo:
-            hi = lo + 1e-6
-        s = np.clip((v - lo) / (hi - lo) * 255.0, 0, 255)
+        lo, hi = np.percentile(vals[i], [1, 99])
+        los.append(float(lo))
+        his.append(float(hi))
+    lo, hi = min(los), max(his)
+    if hi <= lo:
+        hi = lo + 1e-6
+    for i in range(stack.shape[0]):
+        s = np.clip((stack[i] - lo) / (hi - lo) * 255.0, 0, 255)
         s[~valid] = 255
         out[i] = s
     return out
@@ -224,6 +229,8 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
     try:
         with rasterio.open(cog_path) as src:
             integer_store = src.dtypes[0] in ("uint16", "int16")
+            los: list[float] = []
+            his: list[float] = []
             for bi in range(1, min(4, src.count) + 1):
                 arr = src.read(bi, out_shape=(128, 128)).astype("float32")
                 if integer_store:  # 预览栅格按 rho*10000 存储
@@ -231,8 +238,13 @@ def _cog_ranges(cog_path: Path) -> dict[int, tuple[float, float]]:
                     arr[arr <= 0] = np.nan
                 v = arr[np.isfinite(arr)]
                 if v.size:
-                    lo, hi = np.percentile(v, [1, 99.5])
-                    out[bi] = (float(lo), float(hi))
+                    lo, hi = np.percentile(v, [1, 99])
+                    los.append(float(lo))
+                    his.append(float(hi))
+            if los:  # RGB 共用区间，保持色彩平衡
+                lo, hi = min(los), max(his)
+                for bi in range(1, min(4, src.count) + 1):
+                    out[bi] = (lo, hi)
     except Exception:
         return out
     if len(_COG_RANGE_CACHE) > 64:
@@ -285,7 +297,7 @@ def render_cog_tile_subrect(
         stack = np.stack(chans)
         valid = np.isfinite(stack).all(axis=0) & (stack.sum(axis=0) > 0)
         ranges = (
-            {1: (0.0, 1.0), 2: (0.0, 1.0), 3: (0.0, 1.0), 4: (0.0, 1.0)}
+            {1: (0.0, 0.4), 2: (0.0, 0.4), 3: (0.0, 0.4), 4: (0.0, 0.4)}
             if stretch == "none"
             else _cog_ranges(cog_path)
         )
@@ -367,7 +379,7 @@ def render_raster_tile(
     else:
         valid = np.isfinite(canvas).all(axis=0) & (canvas.sum(axis=0) > 0)
         ranges = (
-            {1: (0.0, 1.0), 2: (0.0, 1.0), 3: (0.0, 1.0), 4: (0.0, 1.0)}
+            {1: (0.0, 0.4), 2: (0.0, 0.4), 3: (0.0, 0.4), 4: (0.0, 0.4)}
             if stretch == "none"
             else _cog_ranges(raster_path)
         )
