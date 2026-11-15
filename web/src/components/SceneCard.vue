@@ -2,7 +2,7 @@
   <div class="card scene" :class="{ active }">
     <div class="row" style="margin-top:0">
       <div class="grow" style="cursor:pointer; min-width:0" @click="$emit('select', scene)">
-        <div style="font-weight:600;font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ scene.scene_id }}</div>
+        <div style="font-weight:600;font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" :title="scene.scene_id">{{ shortScene(scene.scene_id, { date: false }) }}</div>
         <div class="hint" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ fmtTime }}<span v-if="platform"> · {{ platform }}</span> · {{ scene.provider }}</div>
       </div>
       <div style="flex:none">
@@ -39,6 +39,8 @@
 <script setup>
 import { computed } from 'vue'
 
+import { shortScene as shortSceneId } from '../utils/scene.js'
+
 const props = defineProps({
   scene: Object,
   active: Boolean,
@@ -48,6 +50,8 @@ const props = defineProps({
   fullJob: Object,   // 该景最近一次「整景」任务（用于继续下载）
 })
 defineEmits(['select', 'download'])
+
+const shortScene = (id) => shortSceneId(id)
 
 const busy = computed(() => props.job && ['queued', 'running'].includes(props.job.status))
 const canResumeFull = computed(

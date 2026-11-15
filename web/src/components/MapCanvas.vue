@@ -254,7 +254,14 @@ function clearResultVector() {
   try { if (map.getLayer('rvec-line')) map.removeLayer('rvec-line') } catch (e) {}
   try { if (map.getSource('rvec')) map.removeSource('rvec') } catch (e) {}
 }
-function setResultVector(geojson) {
+function classPaint(colors, fallback, prop) {
+  if (!Array.isArray(colors) || !colors.length) return fallback
+  const expr = ['match', ['get', 'class']]
+  colors.forEach((c, i) => expr.push(i, c))
+  expr.push(fallback)
+  return expr
+}
+function setResultVector(geojson, colors) {
   if (!map) return
   clearResultVector()
   const feats = (geojson && geojson.features) || []
@@ -262,11 +269,11 @@ function setResultVector(geojson) {
   map.addSource('rvec', { type: 'geojson', data: geojson })
   map.addLayer({
     id: 'rvec-fill', type: 'fill', source: 'rvec',
-    paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.25 },
+    paint: { 'fill-color': classPaint(colors, '#f59e0b', 'fill'), 'fill-opacity': 0.35 },
   })
   map.addLayer({
     id: 'rvec-line', type: 'line', source: 'rvec',
-    paint: { 'line-color': '#b45309', 'line-width': 1 },
+    paint: { 'line-color': classPaint(colors, '#b45309', 'line'), 'line-width': 1 },
   })
   try { map.setLayoutProperty('rvec-fill', 'visibility', vectorVisible ? 'visible' : 'none') } catch (e) {}
   try { map.setLayoutProperty('rvec-line', 'visibility', vectorVisible ? 'visible' : 'none') } catch (e) {}

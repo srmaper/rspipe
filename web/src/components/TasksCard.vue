@@ -9,7 +9,7 @@
       <div v-for="j in jobs.slice(0, 30)" :key="j.id" class="tlr">
         <div class="name">
           <span class="dot" :style="{ background: dotColor(j.status) }"></span>
-          <span class="grow name-text">{{ j.scene_id }}</span>
+          <span class="grow name-text" :title="j.scene_id">{{ shortScene(j.scene_id) }}</span>
           <span class="st">{{ statusText(j.status) }} {{ Math.round((j.progress || 0) * 100) }}%</span>
         </div>
         <div class="pbar"><div :style="{ width: (j.progress || 0) * 100 + '%' }"></div></div>
@@ -30,6 +30,8 @@
 
 <script setup>
 import { computed } from 'vue'
+
+import { shortScene } from '../utils/scene.js'
 const props = defineProps({ jobs: Array })
 defineEmits(['preview', 'meta', 'download', 'delete', 'pause', 'resume', 'clear'])
 const finishedCount = computed(

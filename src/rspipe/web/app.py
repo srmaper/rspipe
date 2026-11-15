@@ -660,6 +660,14 @@ def create_app() -> FastAPI:
         provider = (body.get("provider") or "").strip()
         index = (body.get("index") or "ndvi").strip().lower()
         threshold = float(body.get("threshold", 0.0) or 0.0)
+        raw_breaks = body.get("breaks")
+        breaks = None
+        if isinstance(raw_breaks, list) and raw_breaks:
+            breaks = [float(b) for b in raw_breaks if b is not None][:4]
+        elif isinstance(raw_breaks, (int, float)):
+            breaks = [float(raw_breaks)]
+        classify_arg = breaks if breaks else threshold
+        qs = ("?breaks=" + ",".join(f"{b:g}" for b in breaks)) if breaks else ""
         if not scene_id or not provider:
             raise HTTPException(422, "scene_id / provider 必填")
         if index not in INDICES:
@@ -681,9 +689,9 @@ def create_app() -> FastAPI:
             if not res.get("ok"):
                 return res
             res["classify"] = classify_stats(
-                Path(cfg.data_root), provider, scene_id, index, threshold
+                Path(cfg.data_root), provider, scene_id, index, classify_arg
             )
-            res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png"
+            res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png{qs}"
             res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
             res["has_source"] = bool(res.get("stats", {}).get("has_source"))
             record_run(
@@ -693,6 +701,7 @@ def create_app() -> FastAPI:
                     "mode": "single",
                     "index": index,
                     "threshold": threshold,
+                    "breaks": breaks,
                     "provider": provider,
                     "scene_a": scene_id,
                     "years": res.get("stats", {}).get("years_used"),
@@ -703,8 +712,10 @@ def create_app() -> FastAPI:
         res = compute_scene_index(Path(cfg.data_root), provider, scene_id, coll, index)
         if not res.get("ok"):
             return res
-        res["classify"] = classify_stats(Path(cfg.data_root), provider, scene_id, index, threshold)
-        res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png"
+        res["classify"] = classify_stats(
+            Path(cfg.data_root), provider, scene_id, index, classify_arg
+        )
+        res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png{qs}"
         res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
         res["has_source"] = bool(res.get("stats", {}).get("has_source"))
         from rspipe.web.analysis import record_run
@@ -716,6 +727,7 @@ def create_app() -> FastAPI:
                 "mode": "single",
                 "index": index,
                 "threshold": threshold,
+                "breaks": breaks,
                 "provider": provider,
                 "scene_a": scene_id,
             },
@@ -812,19 +824,35 @@ def create_app() -> FastAPI:
         except (TypeError, ValueError) as exc:
             raise HTTPException(422, f"threshold 非法：{exc}") from exc
         op = "abs" if str(body.get("op") or "above") == "abs" else "above"
+        raw_breaks = body.get("breaks")
+        brs = None
+        if isinstance(raw_breaks, list) and raw_breaks:
+            brs = [float(b) for b in raw_breaks if b is not None][:4]
         try:
             min_area = float(body.get("min_area", 10.0))
         except (TypeError, ValueError):
             min_area = 10.0
         return vectorize_index(
-            Path(cfg.data_root), key, name, threshold, op=op, min_area_m2=max(0.0, min_area)
+            Path(cfg.data_root),
+            key,
+            name,
+            threshold,
+            op=op,
+            breaks=brs,
+            min_area_m2=max(0.0, min_area),
         )
 
     @app.get("/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png")
-    def api_analysis_tile(key: str, name: str, z: int, x: int, y: int):
+    def api_analysis_tile(key: str, name: str, z: int, x: int, y: int, breaks: str | None = None):
         from rspipe.web.analysis import render_index_tile
 
-        data = render_index_tile(Path(cfg.data_root), key, name, z, x, y)
+        brs = None
+        if breaks:
+            try:
+                brs = [float(v) for v in breaks.split(",") if v.strip()]
+            except ValueError:
+                brs = None
+        data = render_index_tile(Path(cfg.data_root), key, name, z, x, y, brs)
         if data is None:
             return Response(status_code=204)
         return Response(

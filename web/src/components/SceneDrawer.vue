@@ -3,7 +3,7 @@
     <div class="mask" @click.self="$emit('close')">
       <div class="drawer">
         <div class="row">
-          <h3 class="grow">{{ d.scene_id }}</h3>
+          <h3 class="grow" :title="d.scene_id">{{ shortScene(d.scene_id) }}</h3>
           <button style="flex:none; min-height:26px; padding:2px 9px" @click="$emit('close')">✕</button>
         </div>
         <table class="kv">
@@ -33,6 +33,8 @@
 
 <script setup>
 import { computed } from 'vue'
+
+import { shortScene } from '../utils/scene.js'
 
 const props = defineProps({ detail: Object })
 defineEmits(['close'])

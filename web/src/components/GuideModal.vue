@@ -86,7 +86,10 @@ const GENERAL = [
   },
 ]
 
-const INDEX_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分']
+const INDEX_ORDER = [
+  '植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分',
+  '热红外与干旱', '多年同期', '雷达与洪涝',
+]
 
 const TOOLS_RAW = [
   {
@@ -194,6 +197,48 @@ const TOOLS_RAW = [
     param: '阈值默认 0.15（>阈值偏盐渍化）',
     result: '盐渍化/干旱区土壤盐分相对高低；输出 {景}/si.tif',
   },
+  {
+    name: 'LST', cn: '地表温度', group: '热红外与干旱',
+    formula: 'T = DN × 0.00341802 + 149 (K)，输出 °C',
+    bands: 'lwir11（Landsat 热红外，30 m 重采样到 100 m）',
+    param: '阈值默认 35 °C（>阈值判为高温）',
+    result: '地表温度分布与高温面积；输出 {景}/lst.tif',
+  },
+  {
+    name: 'TVDI', cn: '温度植被干旱指数', group: '热红外与干旱',
+    formula: '(Ts - Ts_wet) / (Ts_dry - Ts_wet)，干湿边由景内 NDVI-Ts 拟合',
+    bands: 'red、nir、lwir11',
+    param: '阈值默认 0.6（>阈值判为干旱）；仅统计 NDVI>0.1 的植被区',
+    result: '0 湿润 → 1 干旱；输出 {景}/tvdi.tif（干湿边参数写在 json）',
+  },
+  {
+    name: 'VCI', cn: '植被状况指数', group: '多年同期',
+    formula: '(NDVI - NDVI_min) / (NDVI_max - NDVI_min) × 100',
+    bands: 'red、nir（历史景自动检索下载）',
+    param: '同季 ±16 天、至少 3 个历史年有效；NDVI>0.1 才统计',
+    result: '0 胁迫 → 100 良好；输出 {景}/vci.tif 与 ndvi_anom.tif',
+  },
+  {
+    name: 'NDVI 距平', cn: '距平', group: '多年同期',
+    formula: 'NDVI(当期) - 历史同期均值',
+    bands: 'red、nir（与 VCI 同一次计算产出）',
+    param: '阈值默认 0（<0 低于常年）',
+    result: '负值偏干/长势差，正值好于常年；输出 {景}/ndvi_anom.tif',
+  },
+  {
+    name: 'VV (dB)', cn: 'SAR 后向散射', group: '雷达与洪涝',
+    formula: '10 × log10(σ0)，σ0 为 RTC 线性后向散射',
+    bands: 'vv（Sentinel-1，10 m）',
+    param: '阈值默认 -18 dB（<阈值偏水体/光滑面）',
+    result: '地表粗糙度/含水量差异；输出 {景}/vv_db.tif',
+  },
+  {
+    name: 'SAR 水体', cn: '洪涝水体掩膜', group: '雷达与洪涝',
+    formula: 'VV < Otsu 自动阈值（限 -22 ~ -6 dB），先做 5×5 中值去斑',
+    bands: 'vv（Sentinel-1，10 m）',
+    param: '阈值默认 0.5（掩膜 >0.5 判为水体）；自动阈值写入统计 json',
+    result: '1=水体、0=非水体，不受云雨影响；输出 {景}/sar_water.tif',
+  },
 ]
 
 const MEANING = {
@@ -212,6 +257,12 @@ const MEANING = {
   NDMI: '反映植被冠层含水量，用于干旱胁迫、灌溉效果与旱情评估。',
   NDSI: '提取积雪范围，用于雪线变化、融雪期与流域补给的监测。',
   SI: '反映土壤盐分高低，用于干旱灌区次生盐渍化与盐碱地排查。',
+  LST: '直接反映地表热状况，用于城市热岛、蒸散估算与作物/土壤受热胁迫判断。',
+  TVDI: '用「温度—植被」干湿边关系判断土壤水分亏缺，值越高越干，适合区域旱情分级。',
+  VCI: '把当期长势放到历史同期区间里比较，消除季节与地域差异，是农业干旱的标准指标。',
+  'NDVI 距平': '相对常年同期的偏离量，负值表示长势偏差，适合快速筛查异常地块。',
+  'VV (dB)': '雷达后向散射强度，水面/光滑面低、城镇与粗糙地表高，可穿云观测。',
+  'SAR 水体': '基于雷达的水体掩膜，阴雨天也能成像，是汛期洪涝范围提取的主力手段。',
 }
 const TOOLS = TOOLS_RAW.map((t) => ({ ...t, meaning: MEANING[t.name] || '' }))
 

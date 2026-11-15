@@ -26,14 +26,18 @@
           <label>影像{{ mode === 'change' ? ' A（前期）' : '' }}</label>
           <select v-model="sceneA">
             <option value="">选择已下载影像…</option>
-            <option v-for="s in scenes" :key="s.scene_id" :value="s.scene_id">{{ s.scene_id }}</option>
+            <option v-for="s in scenes" :key="s.scene_id" :value="s.scene_id">
+              {{ shortScene(s.scene_id) }}
+            </option>
           </select>
 
           <template v-if="mode === 'change'">
             <label>影像 B（后期）</label>
             <select v-model="sceneB">
               <option value="">选择…</option>
-              <option v-for="s in scenes" :key="s.scene_id" :value="s.scene_id">{{ s.scene_id }}</option>
+              <option v-for="s in scenes" :key="s.scene_id" :value="s.scene_id">
+              {{ shortScene(s.scene_id) }}
+            </option>
             </select>
           </template>
 
@@ -55,17 +59,53 @@
             <input type="range" min="3" max="12" step="1" v-model.number="years" />
           </template>
 
-          <label>
-            {{ mode === 'change' ? '变化阈值' : '分类阈值' }}：{{ threshold }}
-            <span class="muted" v-if="curMeta.label">（{{ curMeta.label }}）</span>
-          </label>
-          <input
-            type="range"
-            :min="sliderRange[0]"
-            :max="sliderRange[1]"
-            :step="sliderRange[2]"
-            v-model.number="threshold"
-          />
+          <template v-if="mode === 'change'">
+            <label>
+              变化阈值：{{ threshold }}
+              <span class="muted" v-if="curMeta.label">（{{ curMeta.label }}）</span>
+            </label>
+            <input
+              type="range"
+              :min="sliderRange[0]"
+              :max="sliderRange[1]"
+              :step="sliderRange[2]"
+              v-model.number="threshold"
+            />
+          </template>
+          <template v-else>
+            <label>
+              分类间隔值：{{ breaks.length }} 个 → {{ breaks.length + 1 }} 段
+              <span class="muted" v-if="curMeta.label">（{{ curMeta.label }}）</span>
+            </label>
+            <div v-for="(b, i) in breaks" :key="i" class="brk">
+              <input
+                type="range"
+                :min="sliderRange[0]"
+                :max="sliderRange[1]"
+                :step="sliderRange[2]"
+                v-model.number="breaks[i]"
+              />
+              <input
+                class="brknum"
+                type="number"
+                :min="sliderRange[0]"
+                :max="sliderRange[1]"
+                :step="sliderRange[2]"
+                v-model.number="breaks[i]"
+              />
+              <button
+                v-if="breaks.length > 1"
+                class="brkdel"
+                title="删除该间隔"
+                @click="removeBreak(i)"
+              >✕</button>
+            </div>
+            <button
+              v-if="breaks.length < 4"
+              style="width:100%;margin-top:4px"
+              @click="addBreak"
+            >+ 添加间隔</button>
+          </template>
 
           <label>生成矢量剔除最小面积（m²）：<span class="muted">小于此面积的面不输出</span></label>
           <input type="number" min="0" step="5" v-model.number="minAreaM2" style="width:100%" />
@@ -80,8 +120,16 @@
 
         <div class="card">
           <h3>图例</h3>
-          <span class="lbar" :style="{ background: legendCss }"></span>
-          <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
+          <template v-if="segments.length">
+            <div v-for="s in segments" :key="s.class" class="seg">
+              <span class="sw" :style="{ background: s.color }"></span>
+              <span class="sgrow">{{ s.range }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <span class="lbar" :style="{ background: legendCss }"></span>
+            <div class="lv"><span>{{ legendLow }}</span><span>{{ legendHigh }}</span></div>
+          </template>
           <div class="hint" style="white-space: pre-line">{{ legendNote }}</div>
         </div>
 
@@ -105,7 +153,9 @@
           <button :class="{ on: aoiOn }" :disabled="!hasAoi" @click="toggleAoi">AOI</button>
           <button @click="closeLayers">关闭</button>
         </div>
-        <div class="badge" v-if="preview">{{ preview.scene_id }}</div>
+        <div class="badge" v-if="preview" :title="preview.scene_id">
+          {{ shortScene(preview.scene_id) }}
+        </div>
       </div>
 
       <!-- 右栏 -->
@@ -132,8 +182,8 @@
               :class="{ active: preview && preview.scene_id === h.key }"
             >
               <div class="hrow" @click="loadHistory(h)">
-                <span class="grow hname">
-                  {{ h.mode === 'change' ? h.scene_a + ' ↔ ' + h.scene_b : h.scene_a }}
+                <span class="grow hname" :title="h.scene_a + (h.scene_b ? ' ↔ ' + h.scene_b : '')">
+                  {{ h.mode === 'change' ? shortScene(h.scene_a) + ' ↔ ' + shortScene(h.scene_b) : shortScene(h.scene_a) }}
                 </span>
                 <span class="badge">{{ h.index.toUpperCase() }}</span>
               </div>
@@ -172,6 +222,7 @@ import MessageBox from './MessageBox.vue'
 import GuideModal from './GuideModal.vue'
 import SwipeCompare from './SwipeCompare.vue'
 import TourGuide from './TourGuide.vue'
+import { shortScene } from '../utils/scene.js'
 
 defineEmits(['home'])
 
@@ -273,6 +324,24 @@ const sceneA = ref('')
 const sceneB = ref('')
 const index = ref('ndvi')
 const threshold = ref(0.3)
+const breaks = ref([0.3])          // 分类间隔值（1 个 = 2 段，最多 4 个 = 5 段）
+const sortedBreaks = computed(() =>
+  [...new Set(breaks.value.map((v) => Number(v)).filter((v) => Number.isFinite(v)))]
+    .sort((a, b) => a - b)
+    .slice(0, 4),
+)
+function addBreak() {
+  if (breaks.value.length >= 4) return
+  const list = sortedBreaks.value
+  const step = sliderRange.value[2] || 0.05
+  const last = list.length ? list[list.length - 1] : sliderRange.value[0]
+  const next = Math.min(sliderRange.value[1], last + step * 4)
+  breaks.value = [...list, next]
+}
+function removeBreak(i) {
+  if (breaks.value.length <= 1) return
+  breaks.value = breaks.value.filter((_, k) => k !== i)
+}
 const years = ref(8)   // 多年同期序列：历史年数
 const isSeries = computed(() => ['vci', 'ndvi_anom'].includes(index.value))
 const minAreaM2 = ref(10)   // 转矢量时剔除的碎斑面积（平方米）
@@ -319,7 +388,11 @@ const statRows = computed(() => {
     add('有效面积', s.area_km2 + ' km²')
     if (s.valid_fraction !== undefined) add('有效占比', (s.valid_fraction * 100).toFixed(1) + '%')
   }
-  if (s.above_area_km2 !== undefined) {
+  if (Array.isArray(s.classes) && s.classes.length) {
+    for (const c of s.classes) {
+      add(c.range, `${c.area_km2} km²（${(c.ratio * 100).toFixed(1)}%）`)
+    }
+  } else if (s.above_area_km2 !== undefined) {
     add(`大于阈值 ${s.threshold}`, `${s.above_area_km2} km²（${(s.above_ratio * 100).toFixed(1)}%）`)
   }
   if (s.kind === 'change') {
@@ -331,6 +404,29 @@ const statRows = computed(() => {
   return rows
 })
 
+function mixHex(a, b, u) {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16))
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16))
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * u))
+  return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')
+}
+function segmentColor(t) {
+  const c = curMeta.value.colors || ['#8b6e50', '#e6d778', '#007837']
+  if (t <= 0.5) return mixHex(c[0], c[1], t * 2)
+  return mixHex(c[1], c[2], (t - 0.5) * 2)
+}
+const segments = computed(() => {
+  if (mode.value === 'change') return []
+  const brs = sortedBreaks.value
+  if (!brs.length) return []
+  const n = brs.length + 1
+  return Array.from({ length: n }, (_, i) => ({
+    class: i,
+    range:
+      i === 0 ? `≤ ${brs[0]}` : i >= brs.length ? `> ${brs[brs.length - 1]}` : `${brs[i - 1]} ~ ${brs[i]}`,
+    color: segmentColor(n === 1 ? 0.5 : i / (n - 1)),
+  }))
+})
 const legendCss = computed(() => {
   const c = curMeta.value.colors || ['#8b6e50', '#e6d778', '#007837']
   const stops = mode.value === 'change' ? ['#c82828', '#f5f5f5', '#00823c'] : c
@@ -350,7 +446,12 @@ const legendNote = computed(() => {
   const desc = INDICES.find((i) => i.name === index.value)?.desc || ''
   const range = m.vmin !== undefined ? `色带区间 ${m.vmin}~${m.vmax}` : ''
   const line1 = [index.value.toUpperCase(), desc, range].filter(Boolean).join(' · ')
-  const line2 = m.label ? `>${threshold.value} 判为「${m.high}」` : ''
+  const brs = sortedBreaks.value
+  const line2 = brs.length
+    ? `按间隔 ${brs.join(' / ')} 分 ${brs.length + 1} 段`
+    : m.label
+      ? `>${threshold.value} 判为「${m.high}」`
+      : ''
   return [line1, line2].filter(Boolean).join('\n')
 })
 
@@ -380,6 +481,7 @@ async function run() {
           provider: current.value?.provider,
           index: index.value,
           threshold: threshold.value,
+          breaks: sortedBreaks.value,
           years: years.value,
         }),
       })
@@ -500,13 +602,17 @@ async function loadVector() {
         key: vectorKey.value,
         name: vectorName.value,
         threshold: threshold.value,
+        breaks: vectorOp.value === 'abs' ? undefined : sortedBreaks.value,
         op: vectorOp.value,
         min_area: minAreaM2.value,
       }),
     })
     const gj = await r.json()
     const n = (gj.features || []).length
-    mapRef.value?.setResultVector(gj)
+    mapRef.value?.setResultVector(
+      gj,
+      vectorOp.value === 'abs' ? null : segments.value.map((s) => s.color),
+    )
     mapRef.value?.setVectorVisible(true)
     logLn(n ? `矢量结果 ${n} 个面` : '矢量结果为空（当前阈值下没有像元）')
   } catch (e) {
@@ -542,7 +648,8 @@ function histLine(h) {
   if (h.mode === 'change' || String(h.index).endsWith('_change')) {
     return `减少 ${s.decrease_km2 ?? '-'} / 增加 ${s.increase_km2 ?? '-'} km² · 阈值 ${thr}`
   }
-  return `均值 ${s.mean ?? '-'} · 面积 ${s.area_km2 ?? '-'} km² · 阈值 ${thr}`
+  const brs = Array.isArray(h.breaks) && h.breaks.length ? h.breaks.join(' / ') : thr
+  return `均值 ${s.mean ?? '-'} · 面积 ${s.area_km2 ?? '-'} km² · 间隔 ${brs}`
 }
 async function loadHistory(h) {
   const isChange = h.mode === 'change' || String(h.index).endsWith('_change')
@@ -559,6 +666,8 @@ async function loadHistory(h) {
   const thr = h.threshold ?? (h.stats || {}).threshold
   if (thr !== null && thr !== undefined) threshold.value = thr
   else applyDefaultThreshold()
+  const brs = Array.isArray(h.breaks) ? h.breaks : Array.isArray((h.stats || {}).breaks) ? h.stats.breaks : null
+  breaks.value = brs && brs.length ? brs.slice(0, 4) : [threshold.value]
 
   viewMode.value = 'result'
   stats.value = { ...(h.stats || {}) }
@@ -672,7 +781,10 @@ async function loadMeta() {
 function applyDefaultThreshold() {
   const m = meta.value[index.value] || {}
   const v = mode.value === 'change' ? m.change_threshold : m.threshold
-  if (typeof v === 'number') threshold.value = v
+  if (typeof v === 'number') {
+    threshold.value = v
+    breaks.value = [v]
+  }
 }
 watch(index, applyDefaultThreshold)
 watch(mode, applyDefaultThreshold)
@@ -733,6 +845,13 @@ onMounted(async () => {
 .kv th { text-align: left; color: var(--muted); padding: 4px 6px; white-space: nowrap; font-weight: 400; vertical-align: top; }
 .kv td { border-bottom: 1px solid var(--line); word-break: break-all; }
 .lbar { display: block; height: 10px; border-radius: 5px; }
+.brk { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.brk input[type='range'] { flex: 1; min-width: 0; }
+.brknum { width: 64px; flex: none; }
+.brkdel { flex: none; padding: 2px 6px; }
+.seg { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0; }
+.sw { width: 18px; height: 12px; border-radius: 3px; flex: none; }
+.sgrow { color: var(--muted, #667085); }
 .lv { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
 .layerbar {
   position: absolute; left: 12px; top: 12px; z-index: 31;

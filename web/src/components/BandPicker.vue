@@ -90,11 +90,16 @@ const LS_META = {
   groups: [
     { label: '可见光与近红外', items: [['blue', '蓝'], ['green', '绿'], ['red', '红'], ['nir08', '近红外']] },
     { label: '短波红外（水体 / 建筑 / 燃烧）', items: [['swir16', '短波1'], ['swir22', '短波2']] },
+    { label: '热红外（地表温度 / 干旱）', items: [['lwir11', '地表温度 ST']] },
     { label: '窄波段与质量', items: [['coastal', '海岸气溶胶'], ['qa_pixel', '云标志']] },
   ],
   presets: [
     { key: 'core', label: '常用 RGBN', bands: ['blue', 'green', 'red', 'nir08', 'qa_pixel'] },
-    { key: 'analysis', label: '分析全能', bands: ['blue', 'green', 'red', 'nir08', 'swir16', 'swir22', 'qa_pixel'] },
+    {
+      key: 'analysis',
+      label: '分析全能',
+      bands: ['blue', 'green', 'red', 'nir08', 'swir16', 'swir22', 'lwir11', 'qa_pixel'],
+    },
     { key: 'all', label: '全选' },
   ],
 }
@@ -165,7 +170,7 @@ const RES = {
   coastal: 60, blue: 10, green: 10, red: 10, nir: 10,
   rededge1: 20, rededge2: 20, rededge3: 20,
   nir08: 20, nir09: 60, swir16: 20, swir22: 20, scl: 20,
-  qa_pixel: 30, vv: 10, vh: 10,
+  qa_pixel: 30, lwir11: 30, vv: 10, vh: 10,
 }
 
 // 每像元压缩后字节：光学 uint16 约 45%，雷达 float32 约 80%

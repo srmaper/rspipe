@@ -724,10 +724,43 @@ def compute_scene_index(
     return {"ok": True, "stats": stats}
 
 
-def classify_stats(
-    data_root: Path, provider: str, scene_id: str, index: str, threshold: float
-) -> dict:
-    """按阈值统计"大于阈值"的面积（绿地率/水体占比等）。"""
+def normalize_breaks(breaks, fallback: float = 0.0) -> list[float]:
+    """单值或列表 → 升序、去重、最多 4 个的间隔值。"""
+    if breaks is None:
+        vals = [float(fallback)]
+    elif isinstance(breaks, (int, float)):
+        vals = [float(breaks)]
+    else:
+        vals = [float(b) for b in breaks if b is not None]
+    uniq = sorted({round(v, 6) for v in vals})
+    return uniq[:4] or [float(fallback)]
+
+
+def segment_label(i: int, breaks: list[float]) -> str:
+    """第 i 段（0..n）的区间文字，边界左开右闭。"""
+    n = len(breaks)
+    if i <= 0:
+        return f"≤ {breaks[0]:g}"
+    if i >= n:
+        return f"> {breaks[-1]:g}"
+    return f"{breaks[i - 1]:g} ~ {breaks[i]:g}"
+
+
+def segment_colors(stops, n: int) -> list[tuple[int, int, int]]:
+    """3 个基准色 → n 个离散段色（线性插值）。"""
+    out: list[tuple[int, int, int]] = []
+    for i in range(n):
+        t = 0.5 if n == 1 else i / (n - 1)
+        if t <= 0.5:
+            a, b, u = stops[0], stops[1], t * 2
+        else:
+            a, b, u = stops[1], stops[2], (t - 0.5) * 2
+        out.append(tuple(round(a[c] + (b[c] - a[c]) * u) for c in range(3)))
+    return out
+
+
+def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, threshold) -> dict:
+    """按间隔值分段统计面积：1 个间隔 → 2 段，最多 4 个 → 5 段。"""
     import rasterio
 
     f = Path(data_root) / "analysis" / scene_id / f"{index}.tif"
@@ -743,14 +776,28 @@ def classify_stats(
         dy = (top - bottom) * 110540 / h
         px_km2 = dx * dy / 1e6
     valid = np.isfinite(a)
-    above = valid & (a > threshold)
+    breaks = normalize_breaks(threshold)
     total = float(valid.sum()) * px_km2
-    hit = float(above.sum()) * px_km2
+    idx = np.digitize(a[valid], breaks, right=True)
+    classes = []
+    for i in range(len(breaks) + 1):
+        area = float((idx == i).sum()) * px_km2
+        classes.append(
+            {
+                "class": i,
+                "range": segment_label(i, breaks),
+                "area_km2": round(area, 2),
+                "ratio": round(area / total, 4) if total else 0.0,
+            }
+        )
+    first = classes[0]["area_km2"]
     return {
-        "threshold": threshold,
-        "above_area_km2": round(hit, 2),
+        "breaks": breaks,
+        "classes": classes,
+        "threshold": breaks[0],
+        "above_area_km2": round(total - first, 2),  # 兼容旧字段：> 第一个间隔
         "valid_area_km2": round(total, 2),
-        "above_ratio": round(hit / total, 4) if total else 0.0,
+        "above_ratio": round((total - first) / total, 4) if total else 0.0,
     }
 
 
@@ -863,6 +910,7 @@ def vectorize_index(
     threshold: float,
     *,
     op: str = "above",
+    breaks: list[float] | None = None,
     min_pixels: int = 4,
     min_area_m2: float = 10.0,
     max_features: int = 3000,
@@ -891,9 +939,16 @@ def vectorize_index(
         transform = src.transform
 
     valid = np.isfinite(a)
-    mask = (np.abs(a) > threshold) if op == "abs" else (a > threshold)
-    mask &= valid
-    if not mask.any():
+    if breaks:
+        brs = normalize_breaks(breaks)
+        cls = np.digitize(np.where(valid, a, -np.inf), brs, right=True)
+        cls[~valid] = -1
+        masks = [(i, segment_label(i, brs), cls == i) for i in range(len(brs) + 1)]
+    else:
+        brs = []
+        base_mask = (np.abs(a) > threshold) if op == "abs" else (a > threshold)
+        masks = [(0, "", base_mask & valid)]
+    if not any(m.any() for _i, _lab, m in masks):
         return {"type": "FeatureCollection", "features": [], "count": 0}
 
     px_deg = abs(transform.a * transform.e)
@@ -906,28 +961,36 @@ def vectorize_index(
         min_area = max(min_area, (min_area_m2 / 1e6) / km2_per_deg2)
 
     polys = []
-    for geom, val in features.shapes(
-        mask.astype("uint8"), mask=mask, transform=transform, connectivity=4
-    ):
-        if not val:
+    for cls_i, label, m in masks:
+        if not m.any():
             continue
-        sh = shape(geom)
-        if sh.is_empty or sh.area < min_area:
-            continue
-        if tol > 0:
-            sh = sh.simplify(tol, preserve_topology=True)
-            if sh.is_empty:
+        for geom, val in features.shapes(
+            m.astype("uint8"), mask=m, transform=transform, connectivity=4
+        ):
+            if not val:
                 continue
-        polys.append((sh.area, sh))
+            sh = shape(geom)
+            if sh.is_empty or sh.area < min_area:
+                continue
+            if tol > 0:
+                sh = sh.simplify(tol, preserve_topology=True)
+                if sh.is_empty:
+                    continue
+            props = {
+                "class": cls_i,
+                "range": label,
+                "area_km2": round(sh.area * km2_per_deg2, 3),
+            }
+            polys.append((sh.area, props, sh))
 
     polys.sort(key=lambda x: -x[0])
     feats = [
         {
             "type": "Feature",
             "geometry": mapping(sh),
-            "properties": {"area_km2": round(area * km2_per_deg2, 3)},
+            "properties": {k: v for k, v in props.items() if v != ""},
         }
-        for area, sh in polys[:max_features]
+        for _area, props, sh in polys[:max_features]
     ]
     out = {
         "type": "FeatureCollection",
@@ -935,6 +998,7 @@ def vectorize_index(
         "count": len(polys),
         "truncated": len(polys) > max_features,
         "threshold": threshold,
+        "breaks": brs,
         "op": op,
         "name": name,
     }
@@ -993,6 +1057,7 @@ def list_history(data_root: Path, limit: int = 50) -> list[dict]:
                 "index": idx,
                 "mode": run.get("mode", "change" if "__" in d.name else "single"),
                 "threshold": run.get("threshold"),
+                "breaks": run.get("breaks"),
                 "provider": run.get("provider"),
                 "scene_a": run.get("scene_a") or parts[0],
                 "scene_b": run.get("scene_b") or (parts[1] if len(parts) > 1 else None),
@@ -1082,7 +1147,15 @@ def export_bundle(data_root: Path, key: str, out_zip: Path) -> Path:
     return out_zip
 
 
-def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: int) -> bytes | None:
+def render_index_tile(
+    data_root: Path,
+    key: str,
+    name: str,
+    z: int,
+    x: int,
+    y: int,
+    breaks: list[float] | None = None,
+) -> bytes | None:
     """指数/变化栅格 → 伪彩瓦片。"""
     import io
 
@@ -1120,13 +1193,22 @@ def render_index_tile(data_root: Path, key: str, name: str, z: int, x: int, y: i
     else:
         stops = COLORMAPS.get(base, COLORMAPS["ndvi"])
         lo, hi = meta.get("vmin", -1.0), meta.get("vmax", 1.0)
-    t = np.clip((arr - lo) / (hi - lo), 0, 1)
-    lo_t, hi_t = np.clip(t * 2, 0, 1), np.clip(t * 2 - 1, 0, 1)
     rgb = np.zeros((3, *arr.shape), dtype="float32")
-    for c in range(3):
-        c01 = stops[0][c] + (stops[1][c] - stops[0][c]) * lo_t
-        c12 = stops[1][c] + (stops[2][c] - stops[1][c]) * hi_t
-        rgb[c] = np.where(valid, np.where(t <= 0.5, c01, c12), 0)
+    if breaks and not is_change:
+        brs = normalize_breaks(breaks)
+        seg = segment_colors(stops, len(brs) + 1)
+        cls = np.digitize(np.where(valid, arr, np.inf), brs, right=True)
+        for i, col in enumerate(seg):
+            hit = valid & (cls == i)
+            for c in range(3):
+                rgb[c] = np.where(hit, col[c], rgb[c])
+    else:
+        t = np.clip((arr - lo) / (hi - lo), 0, 1)
+        lo_t, hi_t = np.clip(t * 2, 0, 1), np.clip(t * 2 - 1, 0, 1)
+        for c in range(3):
+            c01 = stops[0][c] + (stops[1][c] - stops[0][c]) * lo_t
+            c12 = stops[1][c] + (stops[2][c] - stops[1][c]) * hi_t
+            rgb[c] = np.where(valid, np.where(t <= 0.5, c01, c12), 0)
 
     rgba = np.zeros((TILE, TILE, 4), dtype="uint8")
     rgba[dy0:dy1, dx0:dx1, :3] = rgb.transpose(1, 2, 0).astype("uint8")
