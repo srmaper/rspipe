@@ -432,6 +432,8 @@ def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
 # 雷达水体阈值（dB）：按景 Otsu 自动求取，失败时用兜底值，并限制在该区间内
 SAR_WATER_DB = -18.0
 SAR_WATER_RANGE = (-22.0, -6.0)
+# 分段渲染时无值（nodata）的填充色
+NODATA_RGB = (154, 160, 166)
 # 多年同期序列类指数：由 timeseries 模块计算，不走单景路径
 SERIES_INDICES = frozenset({"vci", "ndvi_anom"})
 
@@ -777,7 +779,9 @@ def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, th
         px_km2 = dx * dy / 1e6
     valid = np.isfinite(a)
     breaks = normalize_breaks(threshold)
-    total = float(valid.sum()) * px_km2
+    valid_area = float(valid.sum()) * px_km2
+    nodata_area = float((~valid).sum()) * px_km2
+    extent = valid_area + nodata_area
     idx = np.digitize(a[valid], breaks, right=True)
     classes = []
     for i in range(len(breaks) + 1):
@@ -787,17 +791,28 @@ def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, th
                 "class": i,
                 "range": segment_label(i, breaks),
                 "area_km2": round(area, 2),
-                "ratio": round(area / total, 4) if total else 0.0,
+                "ratio": round(area / extent, 4) if extent else 0.0,
             }
         )
-    first = classes[0]["area_km2"]
+    if nodata_area > 0:
+        classes.append(
+            {
+                "class": -1,
+                "range": "无值",
+                "area_km2": round(nodata_area, 2),
+                "ratio": round(nodata_area / extent, 4) if extent else 0.0,
+                "nodata": True,
+            }
+        )
+    first = next(c["area_km2"] for c in classes if c["class"] == 0)
     return {
         "breaks": breaks,
         "classes": classes,
         "threshold": breaks[0],
-        "above_area_km2": round(total - first, 2),  # 兼容旧字段：> 第一个间隔
-        "valid_area_km2": round(total, 2),
-        "above_ratio": round((total - first) / total, 4) if total else 0.0,
+        "above_area_km2": round(valid_area - first, 2),  # 兼容旧字段：> 第一个间隔
+        "valid_area_km2": round(valid_area, 2),
+        "nodata_area_km2": round(nodata_area, 2),
+        "above_ratio": round((valid_area - first) / extent, 4) if extent else 0.0,
     }
 
 
@@ -944,6 +959,8 @@ def vectorize_index(
         cls = np.digitize(np.where(valid, a, -np.inf), brs, right=True)
         cls[~valid] = -1
         masks = [(i, segment_label(i, brs), cls == i) for i in range(len(brs) + 1)]
+        if (~valid).any():
+            masks.append((-1, "无值", ~valid))
     else:
         brs = []
         base_mask = (np.abs(a) > threshold) if op == "abs" else (a > threshold)
@@ -1202,6 +1219,10 @@ def render_index_tile(
             hit = valid & (cls == i)
             for c in range(3):
                 rgb[c] = np.where(hit, col[c], rgb[c])
+        # 无值单独一类：灰色填充，便于区分「没数据」与「低值」
+        for c, v in enumerate(NODATA_RGB):
+            rgb[c] = np.where(~valid, v, rgb[c])
+        valid = np.ones_like(valid)
     else:
         t = np.clip((arr - lo) / (hi - lo), 0, 1)
         lo_t, hi_t = np.clip(t * 2, 0, 1), np.clip(t * 2 - 1, 0, 1)

@@ -420,12 +420,14 @@ const segments = computed(() => {
   const brs = sortedBreaks.value
   if (!brs.length) return []
   const n = brs.length + 1
-  return Array.from({ length: n }, (_, i) => ({
+  const segs = Array.from({ length: n }, (_, i) => ({
     class: i,
     range:
       i === 0 ? `≤ ${brs[0]}` : i >= brs.length ? `> ${brs[brs.length - 1]}` : `${brs[i - 1]} ~ ${brs[i]}`,
     color: segmentColor(n === 1 ? 0.5 : i / (n - 1)),
   }))
+  segs.push({ class: -1, range: '无值', color: '#9aa0a6', nodata: true })
+  return segs
 })
 const legendCss = computed(() => {
   const c = curMeta.value.colors || ['#8b6e50', '#e6d778', '#007837']
@@ -448,7 +450,7 @@ const legendNote = computed(() => {
   const line1 = [index.value.toUpperCase(), desc, range].filter(Boolean).join(' · ')
   const brs = sortedBreaks.value
   const line2 = brs.length
-    ? `按间隔 ${brs.join(' / ')} 分 ${brs.length + 1} 段`
+    ? `按间隔 ${brs.join(' / ')} 分 ${brs.length + 1} 段，无值单独一类`
     : m.label
       ? `>${threshold.value} 判为「${m.high}」`
       : ''
@@ -611,7 +613,9 @@ async function loadVector() {
     const n = (gj.features || []).length
     mapRef.value?.setResultVector(
       gj,
-      vectorOp.value === 'abs' ? null : segments.value.map((s) => s.color),
+      vectorOp.value === 'abs'
+        ? null
+        : segments.value.map((s) => ({ class: s.class, color: s.color })),
     )
     mapRef.value?.setVectorVisible(true)
     logLn(n ? `矢量结果 ${n} 个面` : '矢量结果为空（当前阈值下没有像元）')
