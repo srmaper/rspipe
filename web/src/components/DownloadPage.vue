@@ -96,6 +96,7 @@
       v-if="bandPick"
       :sid="bandPick.sid"
       :sentinel="bandPick.sentinel"
+      :collection="bandPick.scene.collection"
       :provider="bandPick.provider"
       :area-km2="bandPick.areaKm2 ?? aoiArea"
       @confirm="onBandConfirm"
@@ -687,8 +688,14 @@ const sortedGroups = computed(() => {
     }),
   }))
 })
-const labelOf = g =>
-  (g.collection.includes('landsat') ? 'Landsat 5/7/8/9' : 'Sentinel-2') + ' · ' + g.provider
+const labelOf = g => {
+  const name = g.collection.includes('landsat')
+    ? 'Landsat 5/7/8/9'
+    : g.collection.includes('sentinel-1')
+      ? 'Sentinel-1 雷达'
+      : 'Sentinel-2'
+  return name + ' · ' + g.provider
+}
 
 // 底部坐标条：监听鼠标事件由 MapCanvas 转发
 window.addEventListener('mousemove', e => {})  // 实际由 MapCanvas 回调

@@ -60,7 +60,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 
 const props = defineProps({
   sid: String,
-  sentinel: Boolean,   // true=Sentinel-2；false=Landsat
+  sentinel: Boolean,   // 兼容旧调用：true=Sentinel-2；false=Landsat
+  collection: { type: String, default: '' },
   provider: String,
   areaKm2: { type: Number, default: 0 },
 })
@@ -98,7 +99,26 @@ const LS_META = {
   ],
 }
 
-const meta = computed(() => (props.sentinel ? S2_META : LS_META))
+// 雷达：只有极化方式，没有光学波段
+const S1_META = {
+  required: ['vv', 'vh'],
+  groups: [
+    { label: '极化方式（后向散射）', items: [['vv', 'VV 同极化'], ['vh', 'VH 交叉极化']] },
+  ],
+  presets: [
+    { key: 'core', label: '双极化 VV+VH', bands: ['vv', 'vh'] },
+    { key: 'all', label: '全选' },
+  ],
+}
+
+const kind = computed(() => {
+  const c = (props.collection || '').toLowerCase()
+  if (c.includes('sentinel-1')) return 'sar'
+  if (c.includes('landsat')) return 'landsat'
+  if (c.includes('sentinel')) return 's2'
+  return props.sentinel ? 's2' : 'landsat'
+})
+const meta = computed(() => (kind.value === 'sar' ? S1_META : kind.value === 's2' ? S2_META : LS_META))
 const groups = computed(() =>
   meta.value.groups.map((g) => ({ ...g, items: g.items.map(([k, n]) => ({ k, n })) })),
 )
@@ -145,8 +165,11 @@ const RES = {
   coastal: 60, blue: 10, green: 10, red: 10, nir: 10,
   rededge1: 20, rededge2: 20, rededge3: 20,
   nir08: 20, nir09: 60, swir16: 20, swir22: 20, scl: 20,
-  qa_pixel: 30,
+  qa_pixel: 30, vv: 10, vh: 10,
 }
+
+// 每像元压缩后字节：光学 uint16 约 45%，雷达 float32 约 80%
+const BYTES = { vv: 3.2, vh: 3.2 }
 
 const estimate = computed(() => {
   if (!props.areaKm2) return null
@@ -155,7 +178,7 @@ const estimate = computed(() => {
   for (const k of sel.value) {
     const res = RES[k] || 30
     const px = px10 * (10 / res) ** 2
-    bytes += px * 2 * 0.45                          // uint16 + deflate 约 45%
+    bytes += px * (BYTES[k] ?? 0.9)
   }
   const mb = bytes / 1048576
   const sec = bytes / (300 * 1024)
