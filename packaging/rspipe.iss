@@ -3,7 +3,7 @@
 ; 产物： dist\rspipe-1.1.2-setup.exe
 
 #define MyAppName "rspipe 遥感影像平台"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "rspipe"
 #define MyAppExeName "rspipe.exe"
 
