@@ -237,8 +237,10 @@ class CogReader:
                 f"unsupported compression {info.compression} (only 1=none, 8=deflate); "
                 "use fetch_mode=download instead"
             )
-        if info.predictor not in (1, 2):
+        if info.predictor not in (1, 2, 3):
             raise CogReadError(f"unsupported predictor {info.predictor}")
+        if info.predictor == 3 and info.dtype.kind != "f":
+            raise CogReadError(f"predictor 3 requires float data, got {info.dtype}")
         log.debug(
             "cog.parsed",
             size=(info.width, info.height),
@@ -387,13 +389,16 @@ class CogReader:
 
             raw = zlib.decompress(raw)
         dt = lv.dtype
-        arr = np.frombuffer(raw, dtype=dt)
         need = lv.tile_width * lv.tile_height
-        if arr.size < need:
-            arr = np.pad(arr, (0, need - arr.size))
-        tile = arr[:need].reshape(lv.tile_height, lv.tile_width).copy()
-        if lv.predictor == 2 and dt.kind in "iu":
-            tile = _undo_predictor2(tile)
+        if lv.predictor == 3 and dt.kind == "f":
+            tile = _undo_predictor3(raw, lv.tile_height, lv.tile_width, dt)
+        else:
+            arr = np.frombuffer(raw, dtype=dt)
+            if arr.size < need:
+                arr = np.pad(arr, (0, need - arr.size))
+            tile = arr[:need].reshape(lv.tile_height, lv.tile_width).copy()
+            if lv.predictor == 2 and dt.kind in "iu":
+                tile = _undo_predictor2(tile)
         cache[key] = tile
         if len(cache) > 256:
             cache.clear()
@@ -498,6 +503,8 @@ class CogReader:
         if len(raw) < expected:
             # 边缘瓦片可能不满，填充
             raw = raw + b"\x00" * (expected - len(raw))
+        if info.predictor == 3 and info.dtype.kind == "f":
+            return _undo_predictor3(raw[:expected], info.tile_height, info.tile_width, info.dtype)
         arr = np.frombuffer(raw[:expected], dtype=info.dtype).reshape(
             info.tile_height, info.tile_width
         )
@@ -628,6 +635,24 @@ def _epsg_from_geokeys(entries: dict[int, Any]) -> int | None:
         ):
             return value
     return None
+
+
+def _undo_predictor3(raw: bytes, height: int, width: int, dtype: np.dtype) -> np.ndarray:
+    """浮点水平差分（Predictor=3），与 libtiff 的 fpAcc 一致。
+
+    编码：逐行把交织字节拆成字节平面（最高位在前），行内连续做差分。
+    解码：行内连续前缀和（uint8 回绕）→ 平面还原为交织 → 大端解释为浮点。
+    """
+    nbytes = dtype.itemsize
+    need = height * width * nbytes
+    buf = np.frombuffer(raw[:need], dtype=np.uint8)
+    if buf.size < need:
+        buf = np.pad(buf, (0, need - buf.size))
+    # 每行内按字节平面分组，行内跨平面连续做前缀和
+    rows = np.cumsum(buf.reshape(height, width * nbytes), axis=1, dtype=np.uint8)
+    interleaved = np.ascontiguousarray(rows.reshape(height, nbytes, width).transpose(0, 2, 1))
+    out = np.frombuffer(interleaved.tobytes(), dtype=f">f{nbytes}").reshape(height, width)
+    return out.astype(dtype, copy=False)
 
 
 def _undo_predictor2(arr: np.ndarray) -> np.ndarray:

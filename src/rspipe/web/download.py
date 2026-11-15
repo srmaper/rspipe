@@ -44,6 +44,29 @@ def _existing_bbox(out_dir: Path, scene_id: str, keys) -> tuple | None:
     return None
 
 
+def default_keys(collection: str) -> list[str]:
+    """各数据族的默认下载波段：Sentinel-1 VV/VH；Sentinel-2 全谱；Landsat 光学 + 热红外 ST。"""
+    if "sentinel-1" in collection:
+        return ["vv", "vh"]
+    if "sentinel" in collection:
+        return [
+            "coastal",
+            "blue",
+            "green",
+            "red",
+            "rededge1",
+            "rededge2",
+            "rededge3",
+            "nir",
+            "nir08",
+            "nir09",
+            "swir16",
+            "swir22",
+            "scl",
+        ]
+    return ["coastal", "blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel", "lwir11"]
+
+
 def download_scene_raw(
     pipe,
     layout,
@@ -67,30 +90,12 @@ def download_scene_raw(
     from rspipe.ingest.cogreader import CogReader
     from rspipe.ingest.signing import needs_signing, sign_href
 
-    scenes = pipe.clients[provider].search(ids=[scene_id], max_items=1)
+    scenes = pipe.clients[provider].search(ids=[scene_id], max_items=1, collections=[collection])
     if not scenes:
         raise RuntimeError(f"{scene_id} not found on {provider}")
     scene = scenes[0]
     scene.provider = provider
-    keys = keys or (
-        [
-            "coastal",
-            "blue",
-            "green",
-            "red",
-            "rededge1",
-            "rededge2",
-            "rededge3",
-            "nir",
-            "nir08",
-            "nir09",
-            "swir16",
-            "swir22",
-            "scl",
-        ]
-        if "sentinel" in collection
-        else ["coastal", "blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel"]
-    )
+    keys = keys or default_keys(collection)
     keys = [k for k in keys if scene.asset_by_key(k) is not None]
     out_dir = layout.raw_scene_dir(provider, scene_id)
     out_dir.mkdir(parents=True, exist_ok=True)

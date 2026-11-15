@@ -330,7 +330,9 @@ class JobCenter:
                 job.message = "raw 完成" + (f"（{notes[0]}）" if notes else "")
             else:
                 self._prog(job, 0.0, "准备 …")
-                scene = self._pipe.clients[job.provider].search(ids=[job.scene_id], max_items=1)[0]
+                scene = self._pipe.clients[job.provider].search(
+                    ids=[job.scene_id], max_items=1, collections=[job.collection]
+                )[0]
                 scene.provider = job.provider
                 ctx = SceneContext(
                     scene=scene,

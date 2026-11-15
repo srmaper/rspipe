@@ -45,6 +45,98 @@ def write_aoi_geojson(raw_dir: Path, bbox) -> Path | None:
     return dest
 
 
+def _build_sar_preview(raw_dir: Path, sid: str) -> Path | None:
+    """雷达景的 4326 预览：4 波段 dB 灰度（VV 复制到 RGB，第 4 波段 VH）。
+
+    雷达没有光学三通道，用 VV 灰度代替，保证下载页/分析页/导出包都有可视影像。
+    """
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.warp import calculate_default_transform, reproject
+
+    vv = raw_dir / f"{sid}.vv.tif"
+    if not vv.exists():
+        return None
+    vh = raw_dir / f"{sid}.vh.tif"
+
+    def to_db(arr):
+        lin = arr.astype("float32")
+        lin[lin <= 0] = np.nan
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return 10.0 * np.log10(lin)
+
+    with rasterio.open(vv) as ref:
+        ref_profile = {
+            "height": ref.height,
+            "width": ref.width,
+            "crs": ref.crs,
+            "transform": ref.transform,
+        }
+        vv_arr = to_db(ref.read(1))
+        src_bounds = ref.bounds
+    vh_arr = None
+    if vh.exists():
+        with rasterio.open(vh) as s:
+            same = (
+                (s.width, s.height) == (ref_profile["width"], ref_profile["height"])
+                and s.transform == ref_profile["transform"]
+                and s.crs == ref_profile["crs"]
+            )
+            if same:
+                vh_arr = to_db(s.read(1))
+
+    dst_crs = "EPSG:4326"
+    transform, width, height = calculate_default_transform(
+        ref_profile["crs"], dst_crs, ref_profile["width"], ref_profile["height"], *src_bounds
+    )
+    max_side = 4096
+    if max(width, height) > max_side:
+        s = max(width, height) / max_side
+        width = max(1, round(width / s))
+        height = max(1, round(height / s))
+        transform = transform * transform.scale(s, s)
+
+    def warp(arr):
+        tmp = np.full((height, width), np.nan, dtype="float32")
+        reproject(
+            source=arr,
+            destination=tmp,
+            src_transform=ref_profile["transform"],
+            src_crs=ref_profile["crs"],
+            dst_transform=transform,
+            dst_crs=dst_crs,
+            resampling=Resampling.bilinear,
+            dst_nodata=float("nan"),
+        )
+        return tmp
+
+    out = np.zeros((4, height, width), dtype="float32")
+    out[0] = out[1] = out[2] = warp(vv_arr)
+    out[3] = warp(vh_arr) if vh_arr is not None else out[0]
+
+    dest = raw_dir / f"{sid}.preview_4326.tif"
+    profile = {
+        "driver": "GTiff",
+        "height": height,
+        "width": width,
+        "count": 4,
+        "dtype": "float32",
+        "crs": dst_crs,
+        "transform": transform,
+        "nodata": float("nan"),
+        "compress": "deflate",
+        "tiled": True,
+        "blockxsize": 512,
+        "blockysize": 512,
+    }
+    with rasterio.open(dest, "w", **profile) as d:
+        d.write(out)
+        for i, k in enumerate(("vv", "vv", "vv", "vh"), start=1):
+            d.set_band_description(i, k)
+        d.update_tags(SAR="1", NOTE="dB backscatter; band1-3=VV, band4=VH; NaN=nodata")
+    return dest
+
+
 def build_preview_4326(raw_dir: Path, collection: str) -> Path | None:
     """合并可用波段 → EPSG:4326 的 4 波段反射率栅格（供预览与打包）。"""
     import rasterio
@@ -59,6 +151,8 @@ def build_preview_4326(raw_dir: Path, collection: str) -> Path | None:
             if f.exists():
                 picks[name] = f
                 break
+    if "sentinel-1" in collection:
+        return _build_sar_preview(raw_dir, sid)
     if len(picks) < 3:
         return None
 

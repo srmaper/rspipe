@@ -163,3 +163,34 @@ def test_undo_predictor2_roundtrip():
     diff = np.diff(true, axis=1, prepend=np.zeros((4, 1), dtype="uint16"))
     restored = _undo_predictor2(diff)
     assert np.array_equal(restored, true)
+
+
+def _encode_predictor3(arr: np.ndarray) -> bytes:
+    """按实际文件布局编码：逐行拆字节平面，行内连续差分。"""
+    h, w = arr.shape
+    nbytes = arr.dtype.itemsize
+    big = np.ascontiguousarray(arr.astype(f">f{nbytes}"))
+    inter = np.frombuffer(big.tobytes(), dtype=np.uint8).reshape(h, w, nbytes)
+    rows = np.ascontiguousarray(inter.transpose(0, 2, 1)).reshape(h, w * nbytes).astype(np.int16)
+    diff = np.diff(rows, axis=1, prepend=np.zeros((h, 1), dtype=np.int16))
+    return (diff & 0xFF).astype(np.uint8).tobytes()
+
+
+def test_undo_predictor3_roundtrip_float32():
+    from rspipe.ingest.cogreader import _undo_predictor3
+
+    true = np.array(
+        [[0.0, 0.05, 1.0e-4, 0.75], [1.25, -0.5, 3.5e-3, 42.0], [2.5e-7, 9.0, 0.1, 0.2]],
+        dtype="float32",
+    )
+    h, w = true.shape
+    restored = _undo_predictor3(_encode_predictor3(true), h, w, np.dtype("float32"))
+    assert restored.dtype == np.dtype("float32")
+    assert np.array_equal(restored, true)
+
+
+def test_undo_predictor3_pads_short_tiles():
+    from rspipe.ingest.cogreader import _undo_predictor3
+
+    out = _undo_predictor3(b"", 2, 3, np.dtype("float32"))
+    assert out.shape == (2, 3) and np.all(out == 0)

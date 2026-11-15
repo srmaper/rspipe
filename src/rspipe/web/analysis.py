@@ -34,6 +34,21 @@ INDICES = {
     "fai": (("green", "red", "nir", "swir16"), "浮游藻类指数 NIR-基线(Red→SWIR1)，仅统计水体"),
     "ndsi": (("green", "swir16"), "归一化积雪指数 (G-SWIR1)/(G+SWIR1)"),
     "si": (("red", "swir16"), "盐分指数 √(Red×SWIR1)"),
+    "vv_db": (("vv",), "SAR 后向散射 VV (dB) = 10·log10(σ0)，RTC 线性功率"),
+    "sar_water": (
+        ("vv",),
+        "SAR 水体掩膜：按景 Otsu 自动阈值（VV 低值为水体），5×5 中值去斑",
+    ),
+    "lst": (("lwir11",), "地表温度 (°C)，Landsat 热红外 ST 波段（C2 L2）"),
+    "tvdi": (
+        ("red", "nir", "lwir11"),
+        "温度植被干旱指数 TVDI（0=湿润，1=干旱），景内 NDVI-Ts 干湿边拟合",
+    ),
+    "vci": (
+        ("red", "nir"),
+        "植被状况指数 VCI=(NDVI-历史最小)/(历史最大-历史最小)×100，需同期多年影像",
+    ),
+    "ndvi_anom": (("red", "nir"), "NDVI 距平 = 当期 NDVI − 历史同期均值，需同期多年影像"),
 }
 
 # 伪彩：低 → 中 → 高
@@ -53,6 +68,12 @@ COLORMAPS = {
     "fai": [(30, 60, 120), (240, 240, 240), (0, 160, 60)],
     "ndsi": [(140, 110, 80), (235, 240, 250), (70, 130, 220)],
     "si": [(30, 110, 50), (230, 220, 180), (180, 60, 40)],
+    "vv_db": [(20, 40, 120), (150, 150, 150), (250, 250, 240)],
+    "sar_water": [(235, 235, 235), (170, 190, 220), (20, 90, 200)],
+    "lst": [(40, 90, 200), (250, 230, 120), (200, 40, 30)],
+    "tvdi": [(40, 90, 200), (250, 230, 120), (200, 40, 30)],
+    "vci": [(200, 40, 30), (240, 220, 120), (0, 120, 55)],
+    "ndvi_anom": [(200, 40, 40), (245, 245, 245), (0, 130, 60)],
 }
 
 # 每个指数的推荐阈值与显示区间（不同指数的取值范围差别很大，不能共用一个）
@@ -241,6 +262,78 @@ INDEX_META = {
         "change_vmin": -0.2,
         "change_vmax": 0.2,
     },
+    "vv_db": {
+        "label": "SAR 后向散射",
+        "threshold": -18.0,
+        "slider": (-30.0, 5.0, 0.5),
+        "vmin": -25.0,
+        "vmax": 0.0,
+        "low": "水体 / 光滑",
+        "high": "城镇 / 粗糙",
+        "change_threshold": 3.0,
+        "change_vmin": -6.0,
+        "change_vmax": 6.0,
+    },
+    "sar_water": {
+        "label": "SAR 水体（洪涝）",
+        "threshold": 0.5,
+        "slider": (0.0, 1.0, 1.0),
+        "vmin": 0.0,
+        "vmax": 1.0,
+        "low": "非水体",
+        "high": "水体",
+        "change_threshold": 0.5,
+        "change_vmin": -1.0,
+        "change_vmax": 1.0,
+    },
+    "lst": {
+        "label": "地表温度",
+        "threshold": 35.0,
+        "slider": (0.0, 60.0, 1.0),
+        "vmin": 10.0,
+        "vmax": 50.0,
+        "low": "低温",
+        "high": "高温",
+        "change_threshold": 3.0,
+        "change_vmin": -10.0,
+        "change_vmax": 10.0,
+    },
+    "tvdi": {
+        "label": "温度植被干旱指数",
+        "threshold": 0.6,
+        "slider": (0.0, 1.0, 0.05),
+        "vmin": 0.0,
+        "vmax": 1.0,
+        "low": "湿润",
+        "high": "干旱",
+        "change_threshold": 0.1,
+        "change_vmin": -0.5,
+        "change_vmax": 0.5,
+    },
+    "vci": {
+        "label": "植被状况指数 VCI",
+        "threshold": 50.0,
+        "slider": (0.0, 100.0, 5.0),
+        "vmin": 0.0,
+        "vmax": 100.0,
+        "low": "胁迫（差）",
+        "high": "良好",
+        "change_threshold": 10.0,
+        "change_vmin": -30.0,
+        "change_vmax": 30.0,
+    },
+    "ndvi_anom": {
+        "label": "NDVI 距平",
+        "threshold": 0.0,
+        "slider": (-0.4, 0.4, 0.02),
+        "vmin": -0.3,
+        "vmax": 0.3,
+        "low": "低于常年",
+        "high": "高于常年",
+        "change_threshold": 0.05,
+        "change_vmin": -0.2,
+        "change_vmax": 0.2,
+    },
 }
 
 BAND_ALIASES = {
@@ -248,6 +341,8 @@ BAND_ALIASES = {
     "swir16": ("swir16", "swir1"),
     "swir22": ("swir22", "swir2"),
     "rededge1": ("rededge1", "red_edge_1"),
+    "lwir11": ("lwir11", "lwir", "ST_B10"),
+    "vv": ("vv", "VV"),
 }
 
 
@@ -328,10 +423,128 @@ def _read_grid(raw_dir: Path, sid: str, keys, collection: str):
                         dst_crs=crs,
                         resampling=Resampling.bilinear,
                     )
-            arr = arr * 2.75e-05 - 0.2 if "landsat" in collection else arr / 10000.0
+            arr = _scale_band(k, arr, collection)
             arr[arr <= 0] = np.nan
             out[k] = arr
     return out, transform, crs, []
+
+
+# 雷达水体阈值（dB）：按景 Otsu 自动求取，失败时用兜底值，并限制在该区间内
+SAR_WATER_DB = -18.0
+SAR_WATER_RANGE = (-22.0, -6.0)
+# 多年同期序列类指数：由 timeseries 模块计算，不走单景路径
+SERIES_INDICES = frozenset({"vci", "ndvi_anom"})
+
+
+def collection_from_scene_id(scene_id: str) -> str:
+    """由景号前缀推断 STAC collection（S1 雷达 / Landsat / Sentinel-2）。"""
+    sid = scene_id.upper()
+    if sid.startswith("S1"):
+        return "sentinel-1-rtc"
+    if sid.startswith("L"):
+        return "landsat-c2-l2"
+    return "sentinel-2-l2a"
+
+
+def _scale_band(key: str, dn: np.ndarray, collection: str) -> np.ndarray:
+    """原始 DN / 线性功率 → 物理量。
+
+    - SAR RTC（vv/vh）：线性后向散射系数，无需缩放
+    - Landsat 热红外 lwir11（ST_B10）：K = DN×0.00341802 + 149
+    - Landsat 光学 C2 L2：反射率 = DN×2.75e-5 − 0.2
+    - Sentinel-2 L2A：反射率 = DN/10000
+    DN 为 0（nodata）的像元先置 NaN，再做缩放，避免热红外产生 149 K 的假值。
+    """
+    out = np.asarray(dn, dtype="float32").copy()
+    dead = ~(out > 0)
+    coll = collection.lower()
+    if key in ("vv", "vh") or "sentinel-1" in coll:
+        pass
+    elif key.startswith("lwir"):
+        out = out * np.float32(0.00341802) + np.float32(149.0)
+    elif "landsat" in coll:
+        out = out * np.float32(2.75e-05) - np.float32(0.2)
+    else:
+        out = out / np.float32(10000.0)
+    out[dead] = np.nan
+    return out
+
+
+def otsu_threshold(values: np.ndarray, bins: int = 256) -> float | None:
+    """Otsu 类间方差最大处的阈值；样本太少或退化为单值时返回 None。"""
+    v = np.asarray(values, dtype="float64")
+    v = v[np.isfinite(v)]
+    if v.size < 1000:
+        return None
+    lo, hi = np.percentile(v, [0.5, 99.5])
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi - lo < 1e-6:
+        return None
+    hist, edges = np.histogram(v, bins=bins, range=(lo, hi))
+    total = hist.sum()
+    if total <= 0:
+        return None
+    w0 = np.cumsum(hist).astype("float64")
+    w1 = total - w0
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    m0 = np.cumsum(hist * centers)
+    mt = m0[-1]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mu0 = m0 / w0
+        mu1 = (mt - m0) / w1
+        between = w0 * w1 * (mu0 - mu1) ** 2
+    between = np.where((w0 > 0) & (w1 > 0), between, -np.inf)
+    k = int(np.argmax(between))
+    if not np.isfinite(between[k]) or between[k] <= 0:
+        return None
+    return float(edges[k + 1])
+
+
+def tvdi_array(
+    ndvi: np.ndarray, lst: np.ndarray, bins: int = 20, min_pixels: int = 30
+) -> tuple[np.ndarray, dict | None]:
+    """TVDI = (Ts − Ts_wet) / (Ts_dry − Ts_wet)，0 湿润 → 1 干旱。
+
+    干湿边：把 NDVI 按分位数分箱，每箱取 95% 分位温度作干边、5% 分位作湿边，
+    再对箱中心做线性拟合 Ts = a + b·NDVI。返回 (tvdi, 拟合参数)；像元不足时参数为 None。
+    """
+    out = np.full(ndvi.shape, np.nan, dtype="float32")
+    # TVDI 只对植被有意义：水面/裸地 NDVI 过低，会把干湿边拉偏
+    valid = np.isfinite(ndvi) & np.isfinite(lst) & (ndvi > 0.1)
+    if int(valid.sum()) < bins * min_pixels:
+        return out, None
+    nd = ndvi[valid].astype("float64")
+    ts = lst[valid].astype("float64")
+    lo, hi = np.percentile(nd, [2, 98])
+    if hi - lo < 0.05:
+        return out, None
+    edges = np.linspace(lo, hi, bins + 1)
+    idx = np.digitize(nd, edges[1:-1])
+    xs, dry, wet = [], [], []
+    for i in range(bins):
+        sel = ts[idx == i]
+        if sel.size < min_pixels:
+            continue
+        xs.append((edges[i] + edges[i + 1]) / 2)
+        dry.append(float(np.percentile(sel, 95)))
+        wet.append(float(np.percentile(sel, 5)))
+    if len(xs) < 4:
+        return out, None
+    dry_b, dry_a = np.polyfit(xs, dry, 1)  # [斜率, 截距]
+    wet_b, wet_a = np.polyfit(xs, wet, 1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ts_dry = dry_a + dry_b * ndvi
+        ts_wet = wet_a + wet_b * ndvi
+        den = ts_dry - ts_wet
+        t = (lst - ts_wet) / den
+    ok = valid & (den > 0.5) & np.isfinite(ndvi)
+    out = np.where(ok, np.clip(t, 0.0, 1.0), np.nan).astype("float32")
+    params = {
+        "dry": [round(float(dry_a), 3), round(float(dry_b), 3)],
+        "wet": [round(float(wet_a), 3), round(float(wet_b), 3)],
+        "ndvi_range": [round(float(lo), 3), round(float(hi), 3)],
+        "bins_used": len(xs),
+    }
+    return out, params
 
 
 def _index_array(name: str, b: dict, collection: str = "") -> np.ndarray:
@@ -377,17 +590,33 @@ def _index_array(name: str, b: dict, collection: str = "") -> np.ndarray:
             return (b["green"] - b["swir16"]) / (b["green"] + b["swir16"])
         if name == "si":
             return np.sqrt(np.clip(b["red"] * b["swir16"], 0.0, None))
+        if name == "vv_db":
+            return 10.0 * np.log10(b["vv"])
+        if name == "sar_water":  # 兜底：正常走 compute_scene_index 的自动阈值分支
+            db = 10.0 * np.log10(np.clip(b["vv"], 1e-9, None))
+            return np.where(np.isfinite(db), (db < SAR_WATER_DB).astype("float32"), np.nan)
+        if name == "lst":
+            return b["lwir11"] - 273.15
     raise ValueError(f"unknown index {name}")
 
 
 def compute_scene_index(
-    data_root: Path, provider: str, scene_id: str, collection: str, index: str
+    data_root: Path,
+    provider: str,
+    scene_id: str,
+    collection: str,
+    index: str,
+    *,
+    dest_dir: Path | None = None,
+    keep_source: bool = True,
 ) -> dict:
     """计算单景指数：写 4326 栅格 + 统计。"""
     import rasterio
     from rasterio.enums import Resampling
     from rasterio.warp import calculate_default_transform, reproject
 
+    if index in SERIES_INDICES:
+        return {"ok": False, "error": "该指数需要同期多年序列，请使用序列计算"}
     raw_dir = Path(data_root) / "raw" / provider / scene_id
     if not raw_dir.is_dir():
         return {"ok": False, "error": "该景未下载"}
@@ -396,7 +625,31 @@ def compute_scene_index(
     if bands is None:
         return {"ok": False, "error": "缺少波段：" + ", ".join(missing)}
 
-    arr = _index_array(index, bands, collection)
+    info: dict = {}
+    if index == "sar_water":
+        from scipy.ndimage import median_filter
+
+        db = 10.0 * np.log10(np.clip(bands["vv"], 1e-9, None))
+        # 单视强度图的斑点噪声会让阈值分割呈椒盐状，先做中值去斑
+        filled = np.where(np.isfinite(db), db, np.nanmedian(db))
+        sm = median_filter(filled, size=5, mode="nearest")
+        thr = otsu_threshold(sm)
+        if thr is None:
+            thr = SAR_WATER_DB
+        thr = float(np.clip(thr, *SAR_WATER_RANGE))
+        arr = np.where(np.isfinite(db), (sm < thr).astype("float32"), np.nan)
+        info["threshold_db"] = round(thr, 2)
+        info["water_ratio"] = round(float(np.nanmean(arr)), 4)
+        info["filter"] = "median5"
+    elif index == "tvdi":
+        with np.errstate(invalid="ignore", divide="ignore"):
+            ndvi = (bands["nir"] - bands["red"]) / (bands["nir"] + bands["red"])
+        arr, edges = tvdi_array(ndvi, bands["lwir11"])
+        if edges is None:
+            return {"ok": False, "error": "干湿边拟合失败（有效像元不足或 NDVI 范围过窄）"}
+        info["edges"] = edges
+    else:
+        arr = _index_array(index, bands, collection)
     valid = np.isfinite(arr)
     if not valid.any():
         return {"ok": False, "error": "无有效像元"}
@@ -425,7 +678,7 @@ def compute_scene_index(
         dst_nodata=float("nan"),
     )
 
-    dest_dir = Path(data_root) / "analysis" / scene_id
+    dest_dir = dest_dir or (Path(data_root) / "analysis" / scene_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{index}.tif"
     with rasterio.open(
@@ -461,7 +714,8 @@ def compute_scene_index(
         "area_km2": round(total_km2, 2),
         "bounds": [round(v, 5) for v in rasterio.open(dest).bounds],
     }
-    stats["has_source"] = _copy_sources(
+    stats.update(info)
+    stats["has_source"] = keep_source and _copy_sources(
         data_root, provider, scene_id, dest_dir, "source_4326.tif", "aoi.geojson"
     )
     (dest_dir / f"{index}.json").write_text(
@@ -519,7 +773,7 @@ def compute_change(
     for sid in (a, b):
         f = Path(data_root) / "analysis" / sid / f"{index}.tif"
         if not f.exists():
-            coll = collection or ("landsat-c2-l2" if sid.startswith("L") else "sentinel-2-l2a")
+            coll = collection or collection_from_scene_id(sid)
             res = compute_scene_index(data_root, provider, sid, coll, index)
             if not res.get("ok"):
                 return {"ok": False, "error": f"{sid} 计算失败：{res.get('error')}"}

@@ -50,6 +50,11 @@
             缺少波段：{{ missingBands.join(', ') }}
           </div>
 
+          <template v-if="isSeries">
+            <label>历史年数：{{ years }} <span class="muted">（同季窗口，至少 3 年有效）</span></label>
+            <input type="range" min="3" max="12" step="1" v-model.number="years" />
+          </template>
+
           <label>
             {{ mode === 'change' ? '变化阈值' : '分类阈值' }}：{{ threshold }}
             <span class="muted" v-if="curMeta.label">（{{ curMeta.label }}）</span>
@@ -186,9 +191,18 @@ const INDICES = [
   { name: 'ndmi', desc: '植被水分', group: '水分与干旱', need: ['nir', 'swir16'] },
   { name: 'ndsi', desc: '积雪', group: '积雪与盐分', need: ['green', 'swir16'] },
   { name: 'si', desc: '盐分', group: '积雪与盐分', need: ['red', 'swir16'] },
+  { name: 'lst', desc: '地表温度', group: '热红外与干旱', need: ['lwir11'] },
+  { name: 'tvdi', desc: '温度植被干旱', group: '热红外与干旱', need: ['red', 'nir', 'lwir11'] },
+  { name: 'vci', desc: '植被状况 VCI', group: '多年同期', need: ['red', 'nir'] },
+  { name: 'ndvi_anom', desc: 'NDVI 距平', group: '多年同期', need: ['red', 'nir'] },
+  { name: 'vv_db', desc: 'SAR 后向散射', group: '雷达与洪涝', need: ['vv'] },
+  { name: 'sar_water', desc: 'SAR 水体（洪涝）', group: '雷达与洪涝', need: ['vv'] },
 ]
 
-const GROUP_ORDER = ['植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分']
+const GROUP_ORDER = [
+  '植被', '水体与水质', '城市与裸土', '燃烧与灾害', '水分与干旱', '积雪与盐分',
+  '热红外与干旱', '多年同期', '雷达与洪涝',
+]
 
 const guideOpen = ref(false)
 const tourOpen = ref(false)
@@ -259,6 +273,8 @@ const sceneA = ref('')
 const sceneB = ref('')
 const index = ref('ndvi')
 const threshold = ref(0.3)
+const years = ref(8)   // 多年同期序列：历史年数
+const isSeries = computed(() => ['vci', 'ndvi_anom'].includes(index.value))
 const minAreaM2 = ref(10)   // 转矢量时剔除的碎斑面积（平方米）
 const meta = ref({})
 const running = ref(false)
@@ -364,6 +380,7 @@ async function run() {
           provider: current.value?.provider,
           index: index.value,
           threshold: threshold.value,
+          years: years.value,
         }),
       })
       const j = await r.json()

@@ -22,7 +22,7 @@
     </main>
 
     <footer class="foot">
-      数据源：earth-search（Sentinel-2）· planetary-computer（Landsat 8/9）
+      数据源：earth-search（Sentinel-2）· planetary-computer（Landsat 8/9 · Sentinel-1）
       <span class="ver">v{{ version }} · <a href="#" @click.prevent="checkUpdate">检查更新</a></span>
     </footer>
 

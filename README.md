@@ -2,12 +2,13 @@
 
 # rspipe — 遥感影像一站式平台（检索 · 下载 · 分析）
 
-**输入一个地名，或在地图上圈一块地，几秒内看到 Sentinel-2 / Landsat 影像；
-勾选需要的波段下载成可直接使用的数据产品；再在同一个网页里算植被指数、做两期变化对比。**
+**输入一个地名，或在地图上圈一块地，几秒内看到 Sentinel-2 / Landsat / Sentinel-1 影像；
+勾选需要的波段下载成可直接使用的数据产品；再在同一个网页里算植被指数、地表温度、
+干旱与洪涝指标，做两期变化对比。**
 
 不需要注册账号，不需要云平台额度，不需要安装 ArcGIS/QGIS —— 数据源是公开的
 [earth-search](https://earth-search.aws.element84.com/v1)（Sentinel-2 L2A）与
-[Planetary Computer](https://planetarycomputer.microsoft.com/)（Landsat 8/9 L2），
+[Planetary Computer](https://planetarycomputer.microsoft.com/)（Landsat 8/9 L2、Sentinel-1 RTC），
 后端只按 AOI 读取 COG 的瓦片窗口，**不下载整景**。
 
 同时它也是一条完整的离线处理链：接入 → 归一化 → COG → 去云 → 匀色 → 镶嵌 → STAC → 检索/预览/下载，
@@ -43,7 +44,9 @@
 | **波段级下载** | 按需勾选波段（10/20/60 m 各自分辨率），弹窗预估体积与耗时；断点续传、分块并发、失败重试 |
 | **瓦片预览** | 后端按墨卡托几何求交渲染 256 瓦片，按景缓存 2%–98% 拉伸，拼接无花斑；真彩 / 假彩 / NDVI |
 | **产品化输出** | 一键导出 zip：`preview_4326.tif` + `composite.tif`(uint16) + `aoi.geojson` + `quicklook.png` + `README.txt` + `raw/` + STAC json |
-| **指数分析** | NDVI / NDWI / NDBI / NBR / BSI / NDRE，阈值分类与面积统计 |
+| **指数分析** | 21 种指数：植被（NDVI/EVI/SAVI/NDRE）、水体（NDWI/MNDWI/AWEI/FAI）、
+地表温度 LST、干旱（TVDI/NDMI/VCI/NDVI 距平）、燃烧（NBR/NBR2）、雷达（VV 后向散射、SAR 水体），
+阈值分类与面积统计 |
 | **变化检测** | 任选两期同一指数差值，输出变化面积（减少/增加），支持双屏滑动对比 |
 | **任务中心** | 同景去重 + 每景锁 + sqlite 持久化，重启后中断任务可续传（已完成波段跳过） |
 | **一键运行** | Windows 双击 `一键部署环境.bat` + `一键启动服务.bat` 即可，自带崩溃自动拉起 |
@@ -186,7 +189,7 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 | GET | `/api/export/{id}` | 打包 zip（COG + composite.tif + raw + quicklook + README + STAC json） |
 | POST | `/api/geocode` | 地名 → 边界（geoscope 主源，Nominatim 兜底，点/线自动 100m 缓冲） |
 | GET | `/api/analysis/scenes` | 已下载影像清单（含可用波段、范围） |
-| POST | `/api/analysis/run` | 计算单景指数（ndvi/ndwi/ndbi/nbr/bsi/ndre/evi/savi/nbr2/ndmi/mndwi/awei/fai/ndsi/si）+ 阈值分类统计 |
+| POST | `/api/analysis/run` | 计算单景指数（21 种，见上表）+ 阈值分类统计；`vci`/`ndvi_anom` 会按同季多年序列自动检索历史影像 |
 | POST | `/api/analysis/change` | 两期指数差值 + 变化面积（减少/增加） |
 | GET | `/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png` | 指数/变化结果伪彩瓦片 |
 | GET | `/api/aoi` | `configs/aoi_*.geojson` 预设列表 |

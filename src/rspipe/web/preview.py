@@ -30,6 +30,26 @@ _KEYS = {
     "ndvi": ("red", "nir"),
 }
 
+# 雷达没有光学三通道：用 VV 做灰度（false 用 VH），保证下载页能预览
+_SAR_KEYS = {
+    "rgb": ("vv",),
+    "false": ("vh", "vv"),
+    "ndvi": ("vv",),
+}
+
+# SAR 灰度显示区间（dB）
+SAR_DB_RANGE = (-25.0, 0.0)
+
+
+def sar_gray(lin: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """线性后向散射 → dB → 0..255 灰度。"""
+    db = 10.0 * np.log10(np.clip(lin, 1e-9, None))
+    valid = np.isfinite(lin) & (lin > 0)
+    lo, hi = SAR_DB_RANGE
+    t = np.clip((db - lo) / (hi - lo), 0.0, 1.0)
+    return np.where(valid, t * 255.0, 0.0).astype("float32"), valid
+
+
 TILE = 256
 
 
@@ -38,7 +58,11 @@ def _get_scene(pipe, provider: str, scene_id: str):
     hit = _scenes.get(scene_id)
     if hit and time.time() - hit[0] < _SCENE_TTL:
         return hit[1]
-    scenes = pipe.clients[provider].search(ids=[scene_id], max_items=1)
+    from rspipe.web.analysis import collection_from_scene_id
+
+    scenes = pipe.clients[provider].search(
+        ids=[scene_id], max_items=1, collections=[collection_from_scene_id(scene_id)]
+    )
     if not scenes:
         return None
     s = scenes[0]
@@ -81,6 +105,9 @@ def _get_reader(pipe, provider: str, scene_id: str, key: str) -> CogReader | Non
 # ── 几何：瓦片 ∩ 影像 → (dst 子矩形, src 像素窗口) ───────────────────────────
 def _dn_to_refl(a: np.ndarray, collection: str) -> np.ndarray:
     f = a.astype("float32")
+    if "sentinel-1" in collection:  # RTC 已是线性后向散射系数
+        f[f <= 0] = np.nan
+        return f
     f = f * 2.75e-05 - 0.2 if "landsat" in collection else f / 10000.0
     f[f <= 0] = np.nan
     return f
@@ -187,7 +214,8 @@ def render_local_tile(
     from rasterio.enums import Resampling
     from rasterio.windows import Window
 
-    keys = _KEYS.get(channels, _KEYS["rgb"])
+    is_sar = "sentinel-1" in collection
+    keys = _SAR_KEYS.get(channels, ("vv",)) if is_sar else _KEYS.get(channels, _KEYS["rgb"])
     raw_dir = Path(data_root) / "raw" / provider / scene_id
     if not raw_dir.is_dir():
         return None
@@ -195,8 +223,12 @@ def render_local_tile(
     for k in keys:
         f = raw_dir / f"{scene_id}.{k}.tif"
         if not f.exists():
+            if is_sar and k != "vv":  # VH 没下载时退回 VV 灰度
+                continue
             return None
         paths[k] = f
+    if not paths:
+        return None
 
     b = tile_bounds(z, x, y)
     canvas = np.full((3, TILE, TILE), np.nan, dtype="float32")
@@ -217,6 +249,9 @@ def render_local_tile(
             got_any = True
     if not got_any:
         return None
+    if is_sar:
+        gray, valid = sar_gray(canvas[0])
+        return _png(np.stack([gray, gray, gray]), valid)
     stacks = [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]]
     if channels == "ndvi":
         rgb, valid = _compose(channels, stacks)
@@ -244,7 +279,8 @@ def render_remote_tile(
     channels: str = "rgb",
     stretch: str = "auto",
 ) -> bytes | None:
-    keys = _KEYS.get(channels, _KEYS["rgb"])
+    is_sar = "sentinel-1" in collection
+    keys = _SAR_KEYS.get(channels, ("vv",)) if is_sar else _KEYS.get(channels, _KEYS["rgb"])
     b = tile_bounds(z, x, y)
     canvas = np.full((3, TILE, TILE), np.nan, dtype="float32")
     got_any = False
@@ -282,6 +318,9 @@ def render_remote_tile(
         got_any = True
     if not got_any:
         return None
+    if is_sar:
+        gray, valid = sar_gray(canvas[0])
+        return _png(np.stack([gray, gray, gray]), valid)
     rgb, valid = _compose(
         channels,
         [canvas[0], canvas[1], canvas[2]] if len(keys) == 3 else [canvas[0], canvas[1]],

@@ -350,7 +350,10 @@ def render_raster_tile(
 
     idx = {"rgb": (1, 2, 3), "false": (4, 1, 2), "ndvi": (1, 4)}.get(channels, (1, 2, 3))
     with rasterio.open(raster_path) as src:
-        if src.count < 3:
+        is_sar = src.tags().get("SAR") == "1"
+        if is_sar:  # 雷达预览是 dB 灰度，三通道同源
+            idx = (1, 1, 1)
+        elif src.count < 3:
             return None
         plan = plan_tile_window(
             src.bounds, src.crs, src.transform, src.width, src.height, tile_bounds(z, x, y)
@@ -385,12 +388,20 @@ def render_raster_tile(
         valid = np.isfinite(nd) & ((nir + red) > 0)
         rgb = _ndvi_lut(np.clip(nd, -1, 1), valid)
     else:
-        valid = np.isfinite(canvas).all(axis=0) & (canvas.sum(axis=0) > 0)
-        ranges = (
-            {1: (0.0, 0.4), 2: (0.0, 0.4), 3: (0.0, 0.4), 4: (0.0, 0.4)}
-            if stretch == "none"
-            else _cog_ranges(raster_path)
+        # 雷达预览是 dB（负值），不能用“和大于 0”判断有效
+        valid = (
+            np.isfinite(canvas).all(axis=0)
+            if is_sar
+            else np.isfinite(canvas).all(axis=0) & (canvas.sum(axis=0) > 0)
         )
+        if is_sar:
+            ranges = {1: (-25.0, 0.0), 2: (-25.0, 0.0), 3: (-25.0, 0.0), 4: (-25.0, 0.0)}
+        else:
+            ranges = (
+                {1: (0.0, 0.4), 2: (0.0, 0.4), 3: (0.0, 0.4), 4: (0.0, 0.4)}
+                if stretch == "none"
+                else _cog_ranges(raster_path)
+            )
         rgb = np.zeros(canvas.shape, dtype="float32")
         for i, bi in enumerate(idx):
             lo, hi = ranges.get(bi, (0.0, 0.30))

@@ -26,6 +26,7 @@
     <label>传感器</label>
     <label class="chk"><input type="radio" value="earth-search|sentinel-2-l2a" v-model="pick" /> Sentinel-2</label>
     <label class="chk"><input type="radio" value="planetary-computer|landsat-c2-l2" v-model="pick" /> Landsat 5/7/8/9（含历史存档）</label>
+    <label class="chk"><input type="radio" value="planetary-computer|sentinel-1-rtc" v-model="pick" /> Sentinel-1 雷达（SAR，不受云影响）</label>
     <div class="hint years">L5：1984–2011 · L7：1999–今（2003 后有条带）· L8：2013– · L9：2021–</div>
     <div class="row">
       <button class="primary" :disabled="!bboxReady || loading" @click="go">

@@ -150,6 +150,7 @@ class StacClient:
         max_cloud_cover: float | None = None,
         max_items: int | None = None,
         ids: list[str] | None = None,
+        collections: list[str] | None = None,
     ) -> list[SceneMeta]:
         if bbox is None and geometry is None and not ids:
             raise SearchError("bbox / geometry / ids 至少提供一个")
@@ -160,8 +161,10 @@ class StacClient:
             query["eo:cloud_cover"] = {"lte": max_cloud_cover}
 
         kwargs: dict[str, Any] = {}
-        if self.cfg.collections:
-            kwargs["collections"] = self.cfg.collections
+        # 调用方可指定集合（同一 provider 可能挂多个 collection，如 PC 的 Landsat / Sentinel-1）
+        coll = list(collections) if collections else list(self.cfg.collections)
+        if coll:
+            kwargs["collections"] = coll
         if ids:
             kwargs["ids"] = list(ids)
         elif bbox is not None:
@@ -217,8 +220,8 @@ class StacClient:
     # ── Item -> SceneMeta ─────────────────────────────────────────────────
     def item_to_scene(self, item: pystac.Item) -> SceneMeta:
         props: dict[str, Any] = dict(item.properties or {})
-        collection = (
-            item.collection_id or self.cfg.collections[0] if self.cfg.collections else "unknown"
+        collection = item.collection_id or (
+            self.cfg.collections[0] if self.cfg.collections else "unknown"
         )
         platform = props.get("platform") or props.get("instruments")
         if isinstance(platform, list):

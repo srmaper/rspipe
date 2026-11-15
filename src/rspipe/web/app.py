@@ -34,7 +34,7 @@ PROVIDERS_MAP = {
     "earth-search": ("https://earth-search.aws.element84.com/v1", ["sentinel-2-l2a"]),
     "planetary-computer": (
         "https://planetarycomputer.microsoft.com/api/stac/v1",
-        ["landsat-c2-l2"],
+        ["landsat-c2-l2", "sentinel-1-rtc"],
     ),
 }
 
@@ -53,7 +53,9 @@ def collection_of(scene_id: str, items) -> str:
 
 
 def _collection_of_scene(provider: str, scene_id: str) -> str:
-    return "landsat-c2-l2" if scene_id.startswith("L") else "sentinel-2-l2a"
+    from rspipe.web.analysis import collection_from_scene_id
+
+    return collection_from_scene_id(scene_id)
 
 
 def _band_info(scene) -> list[dict]:
@@ -95,7 +97,7 @@ def _raw_bounds(data_root, provider: str, scene_id: str) -> list[float] | None:
     d = Path(data_root) / "raw" / provider / scene_id
     if not d.is_dir():
         return None
-    for k in ("red", "green", "blue", "nir08", "nir"):
+    for k in ("red", "green", "blue", "nir08", "nir", "vv", "lwir11"):
         f = d / f"{scene_id}.{k}.tif"
         if not f.exists():
             continue
@@ -330,13 +332,16 @@ def create_app() -> FastAPI:
             if prov not in PROVIDERS_MAP:
                 continue
             client = pipe.clients[prov]
+            # SAR 没有云量属性，不能套云量过滤
+            cloud = None if coll.startswith("sentinel-1") else req.cloud
             try:
                 scenes = client.search(
                     bbox=bbox,
                     start=sd,
                     end=ed,
-                    max_cloud_cover=req.cloud,
+                    max_cloud_cover=cloud,
                     max_items=100,
+                    collections=[coll],
                 )
             except Exception as exc:
                 log.warning("search %s/%s failed: %s", prov, coll, exc)
@@ -401,7 +406,9 @@ def create_app() -> FastAPI:
         if local is not None:
             return local
         for _coll in PROVIDERS_MAP[provider][1]:
-            hits = pipe.clients[provider].search(ids=[scene_id], max_items=1)
+            hits = pipe.clients[provider].search(
+                ids=[scene_id], max_items=1, collections=[_collection_of_scene(provider, scene_id)]
+            )
             if hits:
                 s = hits[0]
                 return {
@@ -647,7 +654,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/analysis/run")
     def api_analysis_run(body: dict) -> dict:
-        from rspipe.web.analysis import INDICES, classify_stats, compute_scene_index
+        from rspipe.web.analysis import INDICES, SERIES_INDICES, classify_stats, compute_scene_index
 
         scene_id = (body.get("scene_id") or "").strip()
         provider = (body.get("provider") or "").strip()
@@ -658,6 +665,40 @@ def create_app() -> FastAPI:
         if index not in INDICES:
             raise HTTPException(422, f"不支持的指数：{index}")
 
+        if index in SERIES_INDICES:
+            from rspipe.web.analysis import classify_stats, record_run
+            from rspipe.web.timeseries import run_series_for_scene
+
+            res = run_series_for_scene(
+                Path(cfg.data_root),
+                pipe,
+                center._layout,
+                provider,
+                scene_id,
+                index,
+                years=int(body.get("years") or 0) or None,
+            )
+            if not res.get("ok"):
+                return res
+            res["classify"] = classify_stats(
+                Path(cfg.data_root), provider, scene_id, index, threshold
+            )
+            res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png"
+            res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
+            res["has_source"] = bool(res.get("stats", {}).get("has_source"))
+            record_run(
+                Path(cfg.data_root),
+                scene_id,
+                {
+                    "mode": "single",
+                    "index": index,
+                    "threshold": threshold,
+                    "provider": provider,
+                    "scene_a": scene_id,
+                    "years": res.get("stats", {}).get("years_used"),
+                },
+            )
+            return res
         coll = _collection_of_scene(provider, scene_id)
         res = compute_scene_index(Path(cfg.data_root), provider, scene_id, coll, index)
         if not res.get("ok"):
