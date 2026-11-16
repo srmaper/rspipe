@@ -5,7 +5,8 @@
 > - 前端未使用 Element Plus，采用自研浅色样式（`web/src/style.css`）
 > - 页面为 hash 路由三页：`#/` 首页、`#/download` 下载、`#/analysis` 分析
 > - 预览不走 TiTiler，自研瓦片端点（COG → 4326 预览栅格 → raw → 204）
-> - 新增：下载后处理（4326 预览栅格 + AOI 记录）、指数分析（NDVI/NDWI/NDBI/NBR/BSI/NDRE）、两期变化、双屏对比
+> - 新增：下载后处理（4326 预览栅格 + AOI 记录）、指数分析（21 种，含热红外/干旱/雷达）、
+>   多级分类（间隔值 1~4 个 → n+1 段，统计/瓦片/矢量按段输出，无值单独一类）、两期变化、双屏对比
 > - 任务中心 sqlite 持久化，重启可续；服务脚本崩溃自动拉起
 
 
@@ -107,6 +108,11 @@ Web 层只做：搜索代理、AOI 解析、瓦片代理、任务队列、进度
 | POST   | `/api/jobs`                              | body: {scene_id, product: raw|processed, bands?} → 后台线程池                                      |
 | GET    | `/api/jobs/{job_id}` + WS `/ws/jobs`     | 进度/状态（复用 `storage.layout` 与 sqlite）                                                           |
 | GET    | `/api/aoi` / POST `/api/aoi`             | AOI 列表（读 `configs/aoi_*.geojson`）                                                             |
+| POST   | `/api/analysis/run`                      | 单景指数 + 分段统计，body 含 `index` / `breaks`（≤4 个间隔值）/ `years`（序列指数）                        |
+| POST   | `/api/analysis/change`                   | 两期指数差值 + 变化面积                                                                            |
+| POST   | `/api/analysis/vectorize`                | 按间隔值重分类转矢量（属性 class/range/area_km2）                                                    |
+| GET    | `/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}` | 指数/变化瓦片，`?breaks=a,b,c` 为分段离散色                                                   |
+| GET    | `/api/analysis/history` / `export/{key}` | 历史（含分段统计）与结果打包                                                                          |
 
 **瓦片协议**：不动 MapServer/GeoServer，直接用 `rio-tiler`(或 COGReader)  
 返回 256×256 PNG：简单、零部署依赖、缓存走 HTTP `Cache-Control`。

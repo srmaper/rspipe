@@ -47,6 +47,7 @@
 | **指数分析** | 21 种指数：植被（NDVI/EVI/SAVI/NDRE）、水体（NDWI/MNDWI/AWEI/FAI）、
 地表温度 LST、干旱（TVDI/NDMI/VCI/NDVI 距平）、燃烧（NBR/NBR2）、雷达（VV 后向散射、SAR 水体），
 阈值分类与面积统计 |
+| **多级分类** | 间隔值默认 1 个、最多 4 个 → **n+1 段**；统计、瓦片、矢量均按段输出，无值（nodata）单独一类 |
 | **变化检测** | 任选两期同一指数差值，输出变化面积（减少/增加），支持双屏滑动对比 |
 | **任务中心** | 同景去重 + 每景锁 + sqlite 持久化，重启后中断任务可续传（已完成波段跳过） |
 | **一键运行** | Windows 双击 `一键部署环境.bat` + `一键启动服务.bat` 即可，自带崩溃自动拉起 |
@@ -110,7 +111,7 @@ scripts\web_server.cmd   # 杀旧实例并启动，监听 8000（崩溃自动拉
 |---|---|
 | `#/` | 首页（下载影像 / 数据分析 两个入口） |
 | `#/download` | 检索 · AOI 圈选 · 选波段下载 · 真彩/假彩/NDVI 预览 · 导出 zip |
-| `#/analysis` | 指数分析（15 种，按类别分组）、两期变化、双屏对比 |
+| `#/analysis` | 指数分析（21 种，按类别分组）、多级分类（间隔值分段）、两期变化、双屏对比 |
 
 > 单次下载 AOI 面积上限 **10000 km²**（约 100 km × 100 km），超限会在页面中央提示并阻止提交；
 > 更大范围请分块下载后用 `rspipe mosaic` 镶嵌。
@@ -168,7 +169,7 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 | 数据源 | 检索 | 资产 | 需要 |
 |---|---|---|---|
 | `earth-search` | 公开 | 公开 | 无 |
-| `planetary-computer` | 公开 | 公开（自动 SAS 签名） | 无 |
+| `planetary-computer` | 公开 | 公开（自动 SAS 签名） | 无；同时提供 Landsat C2 L2 与 Sentinel-1 RTC |
 | `usgs-landsat` | 公开 | 需 EROS 账号 | `USGS_M2M_USERNAME` / `USGS_M2M_TOKEN` |
 | `cdse-s2` | OAuth2 | OAuth2 | `CDSE_CLIENT_ID` / `CDSE_CLIENT_SECRET` |
 
@@ -188,14 +189,21 @@ Python ≥ 3.11；Windows 上 rasterio wheel 自带 GDAL。
 | GET | `/api/tiles/{id}/{z}/{x}/{y}.png` | 瓦片（本地 COG → 本地 raw → 204） |
 | GET | `/api/export/{id}` | 打包 zip（COG + composite.tif + raw + quicklook + README + STAC json） |
 | POST | `/api/geocode` | 地名 → 边界（geoscope 主源，Nominatim 兜底，点/线自动 100m 缓冲） |
+| GET | `/api/analysis/meta` | 各指数默认阈值、滑块区间、伪彩色带（前端图例用） |
 | GET | `/api/analysis/scenes` | 已下载影像清单（含可用波段、范围） |
-| POST | `/api/analysis/run` | 计算单景指数（21 种，见上表）+ 阈值分类统计；`vci`/`ndvi_anom` 会按同季多年序列自动检索历史影像 |
+| POST | `/api/analysis/run` | 计算单景指数（21 种）+ 分段统计；`breaks` 传间隔值列表（≤4 个，划分 n+1 段）；`vci`/`ndvi_anom` 自动检索同季多年影像 |
 | POST | `/api/analysis/change` | 两期指数差值 + 变化面积（减少/增加） |
-| GET | `/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png` | 指数/变化结果伪彩瓦片 |
+| POST | `/api/analysis/vectorize` | 按间隔值重分类转矢量，属性含 `class` / `range` / `area_km2` |
+| GET | `/api/analysis/history` | 分析历史（含分段统计、间隔值） |
+| DELETE | `/api/analysis/{key}` | 删除一次分析结果（栅格 + 统计 + 矢量 + 快视图） |
+| GET | `/api/analysis/export/{key}` | 导出分析 zip（栅格 + 统计 + 快视图 + 矢量 + README） |
+| GET | `/api/analysis/tiles/{key}/{name}/{z}/{x}/{y}.png` | 指数/变化瓦片；`?breaks=a,b,c` 为分段离散色 |
+| GET | `/api/analysis/source/{key}/{z}/{x}/{y}.png` | 分析用原始影像瓦片（`?stretch=none|auto`） |
 | GET | `/api/aoi` | `configs/aoi_*.geojson` 预设列表 |
 
 **瓦片渲染**：本地 processed COG 优先，其次本地 raw 波段；都没有返回 204（不回落云端）。
 按"瓦片 ∩ 影像范围"求交贴到 256 画布，无值区透明；每通道 2%~98% 拉伸。
+分析结果瓦片：带 `breaks` 时按段离散配色、无值填灰；不带时为连续色带（无值透明）。
 
 ### 检索响应字段
 
