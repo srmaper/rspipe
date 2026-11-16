@@ -37,9 +37,9 @@
         <button @click="addrSearch">搜索</button>
       </div>
         <div class="channelbar" v-if="previewLayer">
-          <button class="stretch stretch-chip" :class="{ on: stretchMode === 'none' }"
-                  :title="'真彩色显示方式：无拉伸（直出+gamma）/ 自动拉伸（1-99.5%）'"
-                  @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}</button>
+          <button v-if="channels" class="stretch stretch-chip" :class="{ on: stretchMode === 'none' }"
+                  :title="'影像显示方式：无拉伸（直出+gamma）/ 拉伸（1-99.5%）'"
+                  @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '拉伸' }}</button>
           <button v-for="c in channelsList" :key="c.v" :class="{ primary: channels === c.v }" @click="setChannels(c.v)">
             {{ c.label }}
           </button>
@@ -655,14 +655,21 @@ async function startJob(s, type, onOk, bands, mode = 'aoi') {
   }, 1200)
 }
 function setChannels(v) {
-  channels.value = v
   const p = previewLayer.value
+  if (!p) return
+  if (channels.value === v) {
+    // 再点一次 = 关闭影像预览（真彩/假彩可以都关，但不能同时开）
+    channels.value = ''
+    mapRef.value?.clearPreview()
+    return
+  }
+  channels.value = v
   mapRef.value?.setPreviewTiles(p.scene_id, v, p.provider, p.collection, p.bounds, stretchMode.value)
 }
 function toggleStretch() {
-  stretchMode.value = stretchMode.value === 'none' ? 'auto' : 'none'
   const p = previewLayer.value
-  if (!p) return
+  if (!p || !channels.value) return
+  stretchMode.value = stretchMode.value === 'none' ? 'auto' : 'none'
   p.stretch = stretchMode.value
   mapRef.value?.setPreviewTiles(p.scene_id, channels.value, p.provider, p.collection, p.bounds, stretchMode.value)
 }

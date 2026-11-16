@@ -112,7 +112,7 @@
 
           <div class="row">
             <button class="primary" id="tour-run" :disabled="!canRun || running" @click="run">
-              {{ running ? '计算中…' : '开始计算' }}
+              {{ running ? '分析中…' : '开始分析' }}
             </button>
           </div>
           <div v-if="error" class="warn">{{ error }}</div>
@@ -137,18 +137,35 @@
 
       <!-- 中央地图 -->
       <div id="center" data-tour="map">
-        <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="tileTemplate" />
+        <MapCanvas ref="mapRef" :preview-scene="preview" :tile-template="resultTemplate" />
         <div class="layerbar" v-if="preview">
-          <button class="stretch stretch-chip" :class="{ on: stretchMode === 'none' }"
-                  :title="'真彩色显示方式：无拉伸（直出+gamma）/ 自动拉伸（1-99.5%）'"
-                  @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '自动拉伸' }}</button>
-          <button :class="{ primary: viewMode === 'source' }" :disabled="!hasSource" @click="showSource">原始影像</button>
-          <button :class="{ primary: viewMode === 'result' }" @click="showResult">结果影像</button>
+          <div class="layrow">
+            <button :class="{ primary: viewMode === 'source' }" :disabled="!hasSource" @click="showSource">原始影像</button>
+            <button class="stretch stretch-chip"
+                    :class="{ on: stretchMode === 'none' && viewMode === 'source' }"
+                    :title="'原始影像显示方式：无拉伸（直出+gamma）/ 拉伸（1-99.5%）'"
+                    @click="toggleStretch">{{ stretchMode === 'none' ? '无拉伸' : '拉伸' }}</button>
+          </div>
+          <div class="layrow">
+            <button :class="{ primary: viewMode === 'result' }" @click="showResult">结果影像</button>
+            <button
+              v-if="mode !== 'change'"
+              class="stretch stretch-chip"
+              :class="{ on: classified && viewMode === 'result' }"
+              :title="'结果影像显示：分类（按间隔值分段）/ 无分类（连续色带）'"
+              @click="toggleClassified"
+            >{{ classified ? '分类' : '无分类' }}</button>
+          </div>
+          <div class="layrow">
+            <button :class="{ on: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
+              {{ vectorBusy ? "生成中…" : "分类矢量" }}
+            </button>
+            <button class="stretch stretch-chip" :class="{ on: !vectorSolid && vectorOn }"
+                    :title="'分类矢量填充：半透明（看得见底图）/ 不透明（实色）'"
+                    @click="toggleVectorOpacity">{{ vectorSolid ? '不透明' : '半透明' }}</button>
+          </div>
           <button v-if="mode === 'change'" :disabled="comparing" @click="openSwipe">
             {{ comparing ? "准备中…" : "双屏比对" }}
-          </button>
-          <button :class="{ on: vectorOn }" :disabled="vectorBusy" @click="toggleVector">
-            {{ vectorBusy ? "生成中…" : "阈值矢量" }}
           </button>
           <button :class="{ on: aoiOn }" :disabled="!hasAoi" @click="toggleAoi">AOI</button>
           <button @click="closeLayers">关闭</button>
@@ -164,7 +181,7 @@
           <h3>分析结果</h3>
           <div v-if="resultAt" class="hint" style="margin-bottom:4px">计算于 {{ fmtTime(resultAt) }}</div>
           <div class="reslist">
-            <div v-if="!stats" class="hint">选择影像与指数后点击「开始计算」。</div>
+            <div v-if="!stats" class="hint">选择影像与指数后点击「开始分析」。</div>
             <table v-if="stats" class="kv">
               <tr v-for="(v, k) in statRows" :key="k"><th>{{ k }}</th><td>{{ v }}</td></tr>
             </table>
@@ -267,13 +284,13 @@ const TOUR_STEPS = [
   },
   {
     selector: '#tour-run',
-    title: '开始计算',
+    title: '开始分析',
     text: '点击后计算指数并生成伪彩栅格，右侧显示统计（均值/中位数/有效面积/超阈值面积等），地图自动叠加结果。',
   },
   {
     selector: '#center',
     title: '地图与图例',
-    text: '左上依次切换「原始影像 / 结果影像 / 阈值矢量 / AOI」，两期变化模式还有「双屏比对」；右下切换底图，底部显示经纬度与比例尺。',
+    text: '左上依次切换「原始影像 / 结果影像 / 分类矢量 / AOI」，两期变化模式还有「双屏比对」；右下切换底图，底部显示经纬度与比例尺。',
   },
   {
     selector: '#tour-result',
@@ -318,6 +335,8 @@ const vectorBusy = ref(false)
 const vectorKey = ref('')
 const vectorName = ref('ndvi')
 const vectorOp = ref('above')
+// 矢量结果缓存：参数没变就直接复用，避免开关切换时重复请求/重复计算
+const vectorCache = ref(null) // { sig, gj }
 const mode = ref('single')
 const scenes = ref([])
 const sceneA = ref('')
@@ -352,6 +371,27 @@ const stats = ref(null)
 const resultAt = ref(0)
 const preview = ref(null)
 const tileTemplate = ref('')
+const classified = ref(true)   // 结果影像：分类分段 / 无分类连续色带
+const vectorSolid = ref(false) // 分类矢量填充：false=半透明，true=不透明
+function toggleVectorOpacity() {
+  vectorSolid.value = !vectorSolid.value
+  mapRef.value?.setVectorOpacity(vectorSolid.value ? 1 : 0.35)
+}
+const resultTemplate = computed(() => {
+  const base = (tileTemplate.value || '').split('?')[0]
+  if (!base) return ''
+  if (!classified.value) return base
+  const brs = sortedBreaks.value
+  return brs.length ? `${base}?breaks=${brs.join(',')}` : base
+})
+async function toggleClassified() {
+  classified.value = !classified.value
+  await nextTick()   // 等 prop 更新后再换瓦片，否则拿到的还是旧模板
+  const p = preview.value
+  if (viewMode.value === 'result' && p?.scene_id) {
+    mapRef.value?.setPreviewTiles(p.scene_id, 'rgb', '', '', p.bounds)
+  }
+}
 const mapRef = ref(null)
 
 const curMeta = computed(() => meta.value[index.value] || {})
@@ -416,7 +456,7 @@ function segmentColor(t) {
   return mixHex(c[1], c[2], (t - 0.5) * 2)
 }
 const segments = computed(() => {
-  if (mode.value === 'change') return []
+  if (mode.value === 'change' || !classified.value) return []
   const brs = sortedBreaks.value
   if (!brs.length) return []
   const n = brs.length + 1
@@ -449,8 +489,10 @@ const legendNote = computed(() => {
   const range = m.vmin !== undefined ? `色带区间 ${m.vmin}~${m.vmax}` : ''
   const line1 = [index.value.toUpperCase(), desc, range].filter(Boolean).join(' · ')
   const brs = sortedBreaks.value
-  const line2 = brs.length
-    ? `按间隔 ${brs.join(' / ')} 分 ${brs.length + 1} 段，无值单独一类`
+  const line2 = !classified.value
+    ? '连续色带（无分类）'
+    : brs.length
+      ? `按间隔 ${brs.join(' / ')} 分 ${brs.length + 1} 段，无值单独一类`
     : m.label
       ? `>${threshold.value} 判为「${m.high}」`
       : ''
@@ -492,7 +534,7 @@ async function run() {
       stats.value = { ...j.stats, ...j.classify }
       resultAt.value = Date.now() / 1000
       logLn(`完成 · 均值 ${j.stats.mean} · 有效 ${j.stats.area_km2} km²`)
-      tileTemplate.value = j.tiles
+      tileTemplate.value = (j.tiles || '').split('?')[0]
       preview.value = {
         scene_id: sceneA.value, ready: true,
         bounds: j.stats.bounds,
@@ -506,6 +548,7 @@ async function run() {
       vectorKey.value = sceneA.value
       vectorName.value = index.value
       vectorOp.value = 'above'
+      vectorCache.value = null
       if (vectorOn.value) loadVector()
     } else {
       const r = await fetch('/api/analysis/change', {
@@ -520,7 +563,7 @@ async function run() {
       stats.value = j.stats
       resultAt.value = Date.now() / 1000
       logLn(`变化完成 · 减少 ${j.stats.decrease_km2} km² / 增加 ${j.stats.increase_km2} km²`)
-      tileTemplate.value = j.tiles
+      tileTemplate.value = (j.tiles || '').split('?')[0]
       const bounds = statsBounds()
       preview.value = { scene_id: j.key, ready: true, bounds }
       viewMode.value = 'result'
@@ -582,20 +625,56 @@ async function openSwipe() {
 function showSource() {
   const p = preview.value
   if (!p || !hasSource.value) return
+  if (viewMode.value === 'source') {
+    // 再点一次 = 关闭（两个图层都关掉也允许）
+    viewMode.value = 'none'
+    mapRef.value?.setSourceVisible(false)
+    return
+  }
   viewMode.value = 'source'
-  mapRef.value?.clearPreview()          // 结果影像让位
+  mapRef.value?.clearPreview()          // 结果影像让位（互斥）
   mapRef.value?.setSourceVisible(true)
 }
 function showResult() {
   const p = preview.value
   if (!p) return
+  if (viewMode.value === 'result') {
+    viewMode.value = 'none'
+    mapRef.value?.clearPreview()
+    return
+  }
   viewMode.value = 'result'
-  mapRef.value?.setSourceVisible(false) // 原始影像让位
+  mapRef.value?.setSourceVisible(false) // 原始影像让位（互斥）
   mapRef.value?.setPreviewTiles(p.scene_id, 'rgb', '', '', p.bounds)
 }
 
+function vectorSig() {
+  const useBreaks = vectorOp.value !== 'abs'
+  return JSON.stringify({
+    key: vectorKey.value,
+    name: vectorName.value,
+    op: vectorOp.value,
+    thr: useBreaks ? null : threshold.value,
+    breaks: useBreaks ? sortedBreaks.value : null,
+    minArea: minAreaM2.value,
+    at: resultAt.value,   // 重新分析后失效
+  })
+}
+function vectorColors() {
+  return vectorOp.value === 'abs'
+    ? null
+    : segments.value.map((s) => ({ class: s.class, color: s.color }))
+}
 async function loadVector() {
   if (!vectorKey.value) return
+  const sig = vectorSig()
+  if (vectorCache.value && vectorCache.value.sig === sig) {
+    // 参数未变：直接复用上次结果，只重新挂到地图上
+    mapRef.value?.setResultVector(vectorCache.value.gj, vectorColors())
+    mapRef.value?.setVectorVisible(true)
+    logLn(`矢量结果复用（${(vectorCache.value.gj.features || []).length} 个面，未重新计算）`)
+    return
+  }
   vectorBusy.value = true
   try {
     const r = await fetch('/api/analysis/vectorize', {
@@ -609,14 +688,19 @@ async function loadVector() {
         min_area: minAreaM2.value,
       }),
     })
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`
+      try {
+        msg = (await r.json()).detail || msg
+      } catch { /* 非 JSON */ }
+      logLn('矢量生成失败: ' + msg)
+      showToast('矢量生成失败：' + msg)
+      return
+    }
     const gj = await r.json()
     const n = (gj.features || []).length
-    mapRef.value?.setResultVector(
-      gj,
-      vectorOp.value === 'abs'
-        ? null
-        : segments.value.map((s) => ({ class: s.class, color: s.color })),
-    )
+    vectorCache.value = { sig, gj }
+    mapRef.value?.setResultVector(gj, vectorColors())
     mapRef.value?.setVectorVisible(true)
     logLn(n ? `矢量结果 ${n} 个面` : '矢量结果为空（当前阈值下没有像元）')
   } catch (e) {
@@ -625,6 +709,13 @@ async function loadVector() {
     vectorBusy.value = false
   }
 }
+// 间隔值/最小面积改动后，若矢量正开着就自动刷新（参数没变时命中缓存，不会重算）
+let vecTimer = null
+watch([sortedBreaks, minAreaM2], () => {
+  if (!vectorOn.value || !vectorKey.value) return
+  clearTimeout(vecTimer)
+  vecTimer = setTimeout(() => loadVector(), 500)
+})
 async function toggleVector() {
   if (!preview.value) return
   vectorOn.value = !vectorOn.value
@@ -705,10 +796,19 @@ async function deleteHistory(h) {
       showToast('删除失败：' + (await r.text()).slice(0, 80))
       return
     }
-    if (preview.value?.scene_id === h.key) {
-      preview.value = null
+    if (preview.value?.scene_id === h.key || vectorKey.value === h.key) {
+      // 当前正在显示的结果被删：栅格、矢量、原始影像、AOI 全部撤掉，避免地图残留
       stats.value = null
-      mapRef.value?.clearPreview()
+      resultAt.value = 0
+      tileTemplate.value = ''
+      vectorOn.value = false
+      vectorKey.value = ''
+      vectorName.value = ''
+      vectorCache.value = null
+      sourceBounds.value = null
+      if (swipe.value) swipe.value = null
+      closeLayers()
+      mapRef.value?.setVectorVisible(false)
     }
     logLn(`已删除分析结果 ${h.key}`)
     loadHistoryList()
@@ -884,10 +984,21 @@ onMounted(async () => {
   border-radius: 10px; padding: 5px 7px; box-shadow: 0 4px 18px rgba(20,30,45,.14);
 }
 .layerbar button { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 11.5px; white-space: nowrap; }
+.layerbar .layrow { position: relative; display: flex; }
+.layerbar .layrow > button:first-child { width: 100%; }
 .layerbar .stretch-chip {
-  position: absolute; top: 3px; left: calc(100% + 6px); width: auto;
-  min-height: 22px; padding: 1px 9px; font-size: 10.5px; border-radius: 9px;
-  white-space: nowrap; box-shadow: 0 3px 12px rgba(20,30,45,.18);
+  position: absolute; top: 50%; left: calc(100% + 8px); transform: translateY(-50%);
+  width: auto; min-height: 20px; padding: 0 8px; font-size: 10px; line-height: 18px;
+  border-radius: 999px; white-space: nowrap;
+  background: rgba(255,255,255,.92); color: #475467;
+  border: 1px solid rgba(16,24,40,.12); box-shadow: 0 1px 4px rgba(16,24,40,.1);
+}
+.layerbar .stretch-chip:hover:not(:disabled) {
+  background: #fff; color: #1d4ed8; border-color: #bfdbfe;
+}
+.layerbar .stretch-chip.on {
+  background: #eff6ff; color: #1d4ed8; border-color: #93c5fd;
+  box-shadow: 0 1px 4px rgba(29,78,216,.14);
 }
 #center > .badge {
   position: absolute; left: 50%; top: 10px; transform: translateX(-50%);

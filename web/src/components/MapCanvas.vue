@@ -261,6 +261,13 @@ function classPaint(pairs, fallback) {
   expr.push(fallback)
   return expr
 }
+let vectorOpacity = 0.35
+function setVectorOpacity(op) {
+  vectorOpacity = Math.min(1, Math.max(0, Number(op) || 0))
+  try {
+    if (map.getLayer('rvec-fill')) map.setPaintProperty('rvec-fill', 'fill-opacity', vectorOpacity)
+  } catch (e) { /* 图层还没建 */ }
+}
 function setResultVector(geojson, classColors) {
   if (!map) return
   clearResultVector()
@@ -269,7 +276,7 @@ function setResultVector(geojson, classColors) {
   map.addSource('rvec', { type: 'geojson', data: geojson })
   map.addLayer({
     id: 'rvec-fill', type: 'fill', source: 'rvec',
-    paint: { 'fill-color': classPaint(classColors, '#f59e0b'), 'fill-opacity': 0.35 },
+    paint: { 'fill-color': classPaint(classColors, '#f59e0b'), 'fill-opacity': vectorOpacity },
   })
   map.addLayer({
     id: 'rvec-line', type: 'line', source: 'rvec',
@@ -443,7 +450,8 @@ function viewportBbox() {
 }
 
 defineExpose({
-  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, setResultVector, setVectorVisible, clearPreview, setBasemap, setDrawMode, viewportBbox,
+  fitBbox, setAoiPolygon, setAoiVisible, setExtentVisible, setPreviewTiles, setResultVector, setVectorVisible,
+setVectorOpacity, clearPreview, setBasemap, setDrawMode, viewportBbox,
   setSourceTiles, clearSource, setSourceVisible, clearResultVector,
   setSceneAoi, clearSceneAoi, setSceneAoiVisible,
 })
