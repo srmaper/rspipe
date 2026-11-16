@@ -716,16 +716,36 @@ async function deleteHistory(h) {
     showToast('删除失败: ' + e)
   }
 }
-function downloadResult(keyArg) {
+async function downloadResult(keyArg) {
   const key = typeof keyArg === 'string' ? keyArg : preview.value?.scene_id
   if (!key) return
-  const a = document.createElement('a')
-  a.href = `/api/analysis/export/${encodeURIComponent(key)}`
-  a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  logLn(`导出分析结果 ${key}.zip`)
+  showToast('正在打包…')
+  try {
+    const r = await fetch(`/api/analysis/export/${encodeURIComponent(key)}`)
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`
+      try {
+        const j = await r.json()
+        msg = j.detail || msg
+      } catch { /* 非 JSON 错误体 */ }
+      showToast('下载失败：' + msg)
+      logLn(`下载失败 ${key}：${msg}`)
+      return
+    }
+    const blob = await r.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${key}.zip`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    logLn(`导出分析结果 ${key}.zip（${(blob.size / 1048576).toFixed(1)} MB）`)
+    showToast('已开始下载')
+  } catch (e) {
+    showToast('下载失败：' + (e.message || e))
+  }
 }
 function applySource(key, bounds) {
   if (!key) return
