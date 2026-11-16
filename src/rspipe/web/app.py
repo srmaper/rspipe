@@ -654,7 +654,13 @@ def create_app() -> FastAPI:
 
     @app.post("/api/analysis/run")
     def api_analysis_run(body: dict) -> dict:
-        from rspipe.web.analysis import INDICES, SERIES_INDICES, classify_stats, compute_scene_index
+        from rspipe.web.analysis import (
+            INDICES,
+            SERIES_INDICES,
+            classify_stats,
+            compute_scene_index,
+            merge_classify,
+        )
 
         scene_id = (body.get("scene_id") or "").strip()
         provider = (body.get("provider") or "").strip()
@@ -691,6 +697,7 @@ def create_app() -> FastAPI:
             res["classify"] = classify_stats(
                 Path(cfg.data_root), provider, scene_id, index, classify_arg
             )
+            merge_classify(Path(cfg.data_root), scene_id, index, res["classify"])
             res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png{qs}"
             res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
             res["has_source"] = bool(res.get("stats", {}).get("has_source"))
@@ -715,6 +722,7 @@ def create_app() -> FastAPI:
         res["classify"] = classify_stats(
             Path(cfg.data_root), provider, scene_id, index, classify_arg
         )
+        merge_classify(Path(cfg.data_root), scene_id, index, res["classify"])
         res["tiles"] = f"/api/analysis/tiles/{scene_id}/{index}/{{z}}/{{x}}/{{y}}.png{qs}"
         res["source_tiles"] = f"/api/analysis/source/{scene_id}/{{z}}/{{x}}/{{y}}.png"
         res["has_source"] = bool(res.get("stats", {}).get("has_source"))

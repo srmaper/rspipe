@@ -816,6 +816,23 @@ def classify_stats(data_root: Path, provider: str, scene_id: str, index: str, th
     }
 
 
+def merge_classify(data_root: Path, key: str, index: str, classify: dict) -> None:
+    """把分段统计并入 <index>.json，历史记录加载时也能显示分段。"""
+    if not classify:
+        return
+    f = Path(data_root) / "analysis" / key / f"{index}.json"
+    if not f.exists():
+        return
+    try:
+        stats = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    stats["breaks"] = classify.get("breaks")
+    stats["classes"] = classify.get("classes")
+    with contextlib.suppress(OSError):
+        f.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _bounds_of(path: Path):
     import rasterio
 
